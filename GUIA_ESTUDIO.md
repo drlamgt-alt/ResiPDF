@@ -1,118 +1,72 @@
-# Guía de estudio con ResiPDF: residencia de cirugía
+# Guía de estudio con ResiPDF (residencia de cirugía)
 
-## 1. Lo que dice la evidencia (y por qué la app está diseñada así)
+## 1. La idea central: el color indica QUÉ HARÁS con la información
 
-- **Subrayar por sí solo rinde poco.** La revisión de Dunlosky et al. (2013) lo clasifica como técnica de **baja utilidad**. Sirve cuando obliga a **seleccionar** y cuando lo marcado se usa luego para **evocar**.
-- **Lo que más fija es la práctica de evocación** (testing effect: Roediger y Karpicke, 2006) **más el repaso espaciado**. De ahí vienen las **tapas**, los sellos **Q** y la **exportación a Anki**.
-- **Lo distinto se recuerda mejor** (efecto von Restorff). Por eso conviene poco color y con significado fijo.
-- **Código estable.** Si un color significa siempre lo mismo, reconoces el tipo de información sin releer.
+- **Subrayar y resumir, por sí solos, rinden poco.** La revisión de Dunlosky et al. (2013) los clasifica como técnicas de baja utilidad. Sirven cuando obligan a **seleccionar** y cuando lo marcado se usa después para **evocar**.
+- **Lo que más fija:** la práctica de evocación (Roediger y Karpicke, 2006) y el **repaso espaciado** (Cepeda et al., 2006).
+- **Muchos colores dispersan la atención** (carga cognitiva). Lo que destaca se recuerda porque es escaso (efecto von Restorff).
+- **Las técnicas generativas** (resumir con tus palabras, autoexplicarte, hacer esquemas) superan a releer (Fiorella y Mayer, 2016). El método **Cornell** las ordena: preguntas en el margen y resumen al pie.
 
-## 2. Perfiles para cirugía (vienen configurados)
+Por eso ResiPDF usa **dos capas**:
 
-### 🩺 Perfil «Cirugía» (Schwartz, Sabiston, manuales, guías)
+### Capa 1: 5 colores, uno por acción de repaso (patrón «Estudio activo»)
 
-Sigue cómo se pregunta un caso quirúrgico: **¿se opera? → ¿cómo? → ¿qué puede salir mal?**
+| Color | Estilo | Significa | Qué hace la app |
+|---|---|---|---|
+| 🟨 Ámbar | Resaltar | **Idea principal** | Va al resumen |
+| 🟪 Violeta | Resaltar | **Pregunta de examen** | Se vuelve pregunta para autoevaluarte |
+| 🟥 Rojo | Subrayar | **Memorizar literal**: cifras, dosis, criterios | Se tapa en modo examen |
+| 🟩 Verde | Resaltar | **Conexión**: «esto explica aquello» | Une los conceptos con una flecha |
+| ⬜ Gris | Subrayar | **No lo entendí** | Va a la lista de dudas |
 
-| # | Color | Estilo | Significado | Ejemplo |
-|---|---|---|---|---|
-| 1 | 🟨 Amarillo | Resaltar | **Concepto clave (high-yield)** | «La causa más frecuente de obstrucción intestinal en adultos son las bridas» |
-| 2 | 🟪 Morado | Resaltar | **Pregunta de examen** | Algo que ya te preguntaron o que repite el banco |
-| 3 | 🟩 Verde | Resaltar | **Indicación quirúrgica / cuándo operar** | Indicaciones de cirugía urgente vs. electiva, manejo conservador |
-| 4 | 🟦 Azul | Resaltar | **Técnica y pasos quirúrgicos** | Abordaje, pasos, puntos críticos (visión crítica de seguridad) |
-| 5 | 🟧 Naranja | Resaltar | **Anatomía quirúrgica** | Triángulo de Calot, irrigación, planos, reparos |
-| 6 | 🩷 Rosa | Resaltar | **Clasificaciones y escalas** | Hinchey, Clavien-Dindo, ASA, Alvarado, Parkland, ATLS |
-| 7 | 🟥 Rojo | Subrayar | **Complicaciones / red flags** | Fuga anastomótica, lesión de vía biliar, signos de alarma |
-| 8 | 🩵 Turquesa | Subrayar | **Cifras, dosis y tiempos** | Antibiótico profiláctico, ayuno, tiempos de retiro, valores de corte |
-| 9 | ⬜ Gris | Subrayar | **No entiendo / repasar** | Dudas para el final de la sesión |
+### Capa 2: etiquetas clínicas
 
-**Por qué este reparto:**
-- **Resaltar = categoría grande**, la que buscas con la vista. **Subrayar = detalle fino** dentro de ella: puedes subrayar en rojo una complicación dentro de una técnica azul sin taparla.
-- **Verde, azul y rojo** forman la secuencia quirúrgica: indicación → técnica → complicación. Al repasar un tema, filtrar por esos tres colores te da el esquema de la cirugía.
-- **Rosa (clasificaciones)** va aparte porque en cirugía se pregunta muchísimo «¿qué grado es y qué manejo corresponde?».
+**Dx · Tx · Cx · Qx · Anatomía · Clasificación · Fisiopato · Epidemio** (editables en Preferencias).
 
-### 🦴 Perfil «Anatomía quirúrgica» (atlas: Netter, Skandalakis…)
+Al levantar el Pencil aparece la barra de etiquetas junto a la marca: toca **Cx** y sigue leyendo. Luego, en **Marcas**, filtras por ejemplo «violeta + Cx» para ver todas las **preguntas sobre complicaciones**.
 
-Usa el **código de color clásico de las láminas**, así el cerebro no tiene que traducir:
+> Si prefieres un color por tema, hay otros patrones: **Cirugía por tema (9 colores)**, **Atlas de anatomía** (arteria roja, vena azul, nervio amarillo…) y **Clínico**. Cada color sigue teniendo su acción. Crea los tuyos en Preferencias → Patrón de colores.
 
-| Color | Significado |
-|---|---|
-| 🟥 Rojo | Arteria |
-| 🟦 Azul | Vena |
-| 🟨 Amarillo | **Nervio (¡no lesionar!)** |
-| 🟩 Verde | Linfático / ganglios |
-| 🟧 Naranja | Plano o reparo quirúrgico |
-| 🟪 Morado | Pregunta de examen |
-| 🩷 Rosa (subrayado) | Variante anatómica |
-| ⬜ Gris | Repasar |
+## 2. Cómo marcar rápido
 
-**Combínalo con las tapas** 🟫: cubre los nombres de las estructuras de la lámina, tócalas para comprobar y vuelve a cubrirlas con 👁. Es el equivalente digital de tapar el atlas con la mano.
+- **Dock de colores:** abajo por defecto. Arrástralo desde su asa a cualquier borde; con la mano izquierda, ponlo a la izquierda.
+- **Toque** en un color = lo eliges. **Mantener pulsado** = color temporal: subrayas con el Pencil y, al soltar, vuelves al anterior.
+- **Teclas 1–9** con teclado externo.
+- **Doble toque del Pencil** = vuelve al color anterior. **Apretar (Pencil Pro)** = rueda de colores junto a la punta.
+- **Hover** (iPad con M2+ / Pencil Pro): ves el color activo bajo la punta antes de tocar.
+- **Dos dedos** = deshacer · **tres dedos** = rehacer.
+- **Arrastra el Pencil sobre la línea**: la marca se ajusta a las palabras aunque el trazo salga torcido.
 
-### 📘 «Clínico (ENARM)» y «Mínimo (4 colores)»
-Para materias no quirúrgicas o cuando estés empezando. Cambia de perfil con 🎨 según el libro que abras.
+## 3. Navegar el libro
 
-## 3. Sellos: marcadores de un toque
+- **Barra lateral** (botón ▯ arriba a la izquierda):
+  - **Índice:** los capítulos del PDF.
+  - **Páginas:** miniaturas.
+  - **Marcas:** filtros por color y etiqueta, más exportación.
+  - **Favoritas:** páginas marcadas con ⭐.
+- **⭐ arriba** marca la página actual como favorita. Úsalo para algoritmos y tablas clave.
+- **Indicador «12 / 340»:** tócalo para ir a una página. **⌘F** busca en el libro.
+- **Modo de lectura:** continuo o página a página (menú ⋯).
 
-| Sello | Úsalo para |
-|---|---|
-| **Q** | «Aquí hay una pregunta.» Luego filtras «Sello Q» y haces tarjetas de Anki |
-| **Qx** | Decisión quirúrgica clave |
-| **Dx / Tx** | Algoritmo de diagnóstico o de tratamiento en la página |
-| **Cx** | Complicación importante |
-| ⭐ | Página clave (algoritmos, tablas). Funciona como **marcador de página** y aparece en la lista |
-| ❓ | Duda para preguntar al adjunto |
-| ✔︎ | Página ya repasada |
+## 4. Método en 3 pasadas
 
-Edita la lista en Preferencias → Sellos. Si mantienes pulsado el botón del sello en la paleta, eliges otro.
-
-## 4. Cómo marcar rápido (ergonomía)
-
-```
- Mano izquierda                         Mano derecha
- ┌─────────┐
- │ ≡     ⌃ │  asa para mover / plegar
- │ 1🟨 2🟪 │                            ✏️ Apple Pencil
- │ 3🟩 4🟦 │  ← toque = cambiar color    pasa por encima del texto
- │ 5🟧 6🩷 │  ← MANTENER = color         (se ajusta a las palabras)
- │ 7🟥 8🩵 │     temporal (resorte)
- │ 9⬜     │
- │ ✏️  ➚   │  lápiz / flecha
- │ ◯  💬   │  círculo / comentario
- │ Q  🟫   │  sello / tapa
- │ ⌫  ✋   │  borrador / navegar
- │ ↶  ↷   │  deshacer / rehacer
- └─────────┘
-```
-
-**Las 6 técnicas más rápidas:**
-1. **Pon arriba los 4 colores que más usas.** En Preferencias → Editar, arrastra para reordenar.
-2. **Resorte con el pulgar.** Estás en amarillo, ves una complicación: **mantén** 🟥 con el pulgar, subraya y suelta. Vuelves a amarillo solo.
-3. **Rueda junto al lápiz** (Pencil Pro: apretar). Elegir color sin mover la vista del texto. Con un Pencil sin «apretar», asígnala al doble toque.
-4. **Doble toque = volver al anterior.** Ideal para alternar dos colores, por ejemplo azul (técnica) y rojo (complicación).
-5. **Dos dedos = deshacer.** No hace falta buscar el botón.
-6. **Vuelta automática.** Después de una flecha o un sello vuelves al marcador que tenías, sin tocar nada.
-
-En **iPad mini horizontal** usa botones «Compacto». En iPad Pro, «Grande».
-
-## 5. Método de estudio en 3 pasadas (adaptado a cirugía)
-
-1. **Mapa (5 min), sin marcar.** Lee títulos, tablas y algoritmos, y pon ⭐ en las páginas de algoritmos.
+1. **Mapa (5 min), sin marcar.** Títulos, tablas y algoritmos; pon ⭐ en los algoritmos.
 2. **Lectura activa.**
-   - Lee **un párrafo completo y después marca**.
+   - Lee un párrafo completo y **después** marca.
    - Que el color no pase del **15–20 % de la página**.
-   - Usa ➚ flechas para unir **causa → complicación** o **estructura → lesión**.
-   - Tapa 🟫 las cifras y los pasos que debas saber de memoria.
-3. **Evocación (lo que realmente fija):**
-   - 📋 **Anotaciones → «Pregunta de examen»** y **«Sello Q»**: tapa el texto y pregúntate la respuesta.
-   - 👁 **Cubre todas las tapas** y recorre el capítulo destapando.
-   - **Exporta el resumen** → Anki (una tarjeta por marca morada, roja o rosa).
-   - Resuelve los **grises** y los ❓ al final de la sesión.
-   - Repaso espaciado a 1, 3, 7 y 21 días.
+   - Usa sobre todo **violeta** (preguntas) y **rojo** (lo literal); el ámbar, con moderación.
+3. **Evocación:**
+   - **Marcas → violeta:** tapa el texto y responde.
+   - **Exporta** las violetas y rojas a Anki.
+   - Resuelve los **grises** al final de cada sesión.
+   - Repasa a los **1, 3, 7 y 21 días**.
 
 ### 🔪 Antes de entrar a quirófano (10 min)
-1. Abre el capítulo del procedimiento y filtra **🟧 Anatomía + 🟦 Técnica + 🟥 Complicaciones**.
-2. Cubre las tapas y recita los **pasos** y las **estructuras en riesgo**.
-3. Después de la cirugía, añade un 💬 comentario con lo que viste o te preguntó el adjunto. Así queda en el PDF para la próxima vez.
+- Filtra **Anatomía + Qx + Cx**.
+- Tapa 🟫 las estructuras en riesgo y recita los pasos.
+- Después de la cirugía, añade un 💬 con lo que te preguntó el adjunto.
 
-### 📅 Guardias y tiempos muertos
-- iPad mini en una mano: **paleta plegada** y **rueda del Pencil**.
-- Modo **Mínimo (4 colores)**: menos decisiones cuando estás cansado.
+## Próximamente
+- **Cuaderno por libro:** hojas para el Pencil, plantilla Cornell, anexos automáticos con tus preguntas y dudas, y figuras recortadas del PDF.
+- **Sincronización** por carpeta de iCloud Drive.
+- **Repaso espaciado** y **modo examen**.

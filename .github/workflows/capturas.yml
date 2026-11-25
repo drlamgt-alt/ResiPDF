@@ -58,10 +58,15 @@ jobs:
           shoot() {
             DEV=$1; NAME=$2; shift 2
             xcrun simctl terminate "$DEV" com.resipdf.app || true
+            sleep 2
             xcrun simctl launch "$DEV" com.resipdf.app -demo "$@"
             sleep 10
             xcrun simctl io "$DEV" screenshot "capturas/$NAME.png"
           }
+
+          # Arranque de calentamiento: la primera reapertura a veces sale en blanco.
+          xcrun simctl launch "$PRO" com.resipdf.app -demo || true
+          sleep 15
 
           shoot "$PRO"  1-editor-ipad-pro
           shoot "$PRO"  2-etiquetas -demoTags

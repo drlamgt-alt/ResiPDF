@@ -58,6 +58,8 @@ struct EditorView: View {
         .task(id: editor.tagRequest?.id) {
             // La barra de etiquetas se cierra sola si no se usa.
             guard let id = editor.tagRequest?.id else { return }
+            // En el modo de capturas se deja visible para poder fotografiarla.
+            if ProcessInfo.processInfo.arguments.contains("-demoTags") { return }
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             if editor.tagRequest?.id == id { withAnimation { editor.tagRequest = nil } }
         }
@@ -77,7 +79,10 @@ struct EditorView: View {
     private var dockInset: CGFloat {
         let edge = store.settings.dockEdge
         let thickness = edge.isVertical ? dockSize.width : dockSize.height
-        return thickness > 0 ? thickness + DockView.margin * 2 : 0
+        guard thickness > 0 else { return 0 }
+        // En horizontal, el nombre del color activo flota sobre el dock: se reserva su altura.
+        let labelSpace: CGFloat = edge.isVertical ? 0 : 30
+        return thickness + DockView.margin * 2 + labelSpace
     }
 
     private var canvas: some View {
