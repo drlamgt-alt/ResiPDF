@@ -70,7 +70,7 @@ enum DemoContent {
                 for block in page {
                     let (text, attrs, spacing) = attributes(for: block)
                     let string = NSAttributedString(string: text, attributes: attrs)
-                    let size = string.boundingRect(with: CGSize(width: 492, height: .greatestFiniteMagnitude),
+                    let size = string.boundingRect(with: CGSize(width: 492, height: CGFloat.greatestFiniteMagnitude),
                                                    options: [.usesLineFragmentOrigin, .usesFontLeading],
                                                    context: nil).size
                     let rect = CGRect(x: 60, y: y, width: 492, height: ceil(size.height))
