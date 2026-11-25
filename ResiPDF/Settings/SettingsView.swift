@@ -4,6 +4,8 @@ struct SettingsView: View {
     @EnvironmentObject private var store: SettingsStore
     @Environment(\.dismiss) private var dismiss
     @State private var confirmDelete = false
+    @State private var newTag = ""
+    @State private var showNewTag = false
 
     private var stampsText: Binding<String> {
         Binding(
@@ -21,11 +23,13 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                profileSection
+                patternSection
                 presetsSection
-                speedSection
+                tagsSection
+                dockSection
                 pencilSection
-                paletteSection
+                speedSection
+                readingSection
                 stampsSection
             }
             .navigationTitle("Preferencias")
@@ -33,54 +37,67 @@ struct SettingsView: View {
                 ToolbarItem(placement: .topBarLeading) { EditButton() }
                 ToolbarItem(placement: .confirmationAction) { Button("Listo") { dismiss() } }
             }
-            .confirmationDialog("¿Eliminar el perfil «\(store.settings.activeProfile.name)»?",
+            .confirmationDialog("¿Eliminar el patrón «\(store.settings.activeProfile.name)»?",
                                 isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Eliminar", role: .destructive) {
-                    let idx = store.settings.activeIndex
-                    store.settings.profiles.remove(at: idx)
+                    store.settings.profiles.remove(at: store.settings.activeIndex)
                     store.settings.activeProfileID = store.settings.profiles.first?.id
                 }
+            }
+            .alert("Nueva etiqueta", isPresented: $showNewTag) {
+                TextField("Ej. Pediatría", text: $newTag)
+                Button("Añadir") {
+                    let tag = SettingsStore.sanitizeTag(newTag)
+                    if !tag.isEmpty, !store.settings.tags.contains(tag) { store.settings.tags.append(tag) }
+                    newTag = ""
+                }
+                Button("Cancelar", role: .cancel) { newTag = "" }
             }
         }
     }
 
-    // MARK: - Secciones
+    // MARK: - Patrón de colores
 
-    private var profileSection: some View {
+    private var patternSection: some View {
         Section {
-            Picker("Perfil activo", selection: Binding(
+            Picker("Patrón activo", selection: Binding(
                 get: { store.settings.activeProfile.id },
                 set: { store.settings.activeProfileID = $0 }
             )) {
                 ForEach(store.settings.profiles) { Text($0.name).tag($0.id) }
             }
-            TextField("Nombre del perfil", text: $store.settings.activeProfileName)
+            TextField("Nombre del patrón", text: $store.settings.activeProfileName)
 
             Menu {
-                ForEach(PresetProfile.builtIn, id: \.name) { template in
-                    Button(template.name) { addProfile(template) }
+                Section("Plantillas") {
+                    ForEach(PresetProfile.builtIn, id: \.name) { template in
+                        Button(template.name) { addProfile(template) }
+                    }
                 }
-                Divider()
-                Button("Copia del perfil actual") {
+                Button("Copia del patrón actual") {
                     var copy = store.settings.activeProfile
-                    copy.id = UUID()
                     copy.name += " (copia)"
                     copy.presets = copy.presets.map { var p = $0; p.id = UUID(); return p }
                     addProfile(copy)
                 }
+                Button("Patrón vacío") {
+                    addProfile(PresetProfile(name: "Mi patrón", presets: [
+                        MarkPreset(name: "Idea principal", hex: "#FFC94D", style: .highlight, action: .summary),
+                    ]))
+                }
             } label: {
-                Label("Añadir perfil", systemImage: "plus.square.on.square")
+                Label("Crear patrón", systemImage: "plus.square.on.square")
             }
 
             if store.settings.profiles.count > 1 {
                 Button(role: .destructive) { confirmDelete = true } label: {
-                    Label("Eliminar este perfil", systemImage: "trash")
+                    Label("Eliminar este patrón", systemImage: "trash")
                 }
             }
         } header: {
-            Text("Perfiles de color")
+            Text("Patrón de colores")
         } footer: {
-            Text("Un perfil por tipo de libro: «Cirugía» para Schwartz/Sabiston, «Anatomía quirúrgica» para atlas, «Clínico» para el resto. Se cambia rápido con el botón 🎨 de la barra superior.")
+            Text("Un patrón es tu sistema de colores. El recomendado usa 5 colores, cada uno ligado a lo que harás al repasar; el tema clínico va en etiquetas. Cámbialo rápido con 🎨 en la barra superior.")
         }
     }
 
@@ -102,26 +119,56 @@ struct SettingsView: View {
 
             Button {
                 let hex = MarkPreset.swatches[store.settings.presets.count % MarkPreset.swatches.count]
-                store.settings.presets.append(MarkPreset(name: "Nuevo marcador", hex: hex, style: .highlight))
+                store.settings.presets.append(MarkPreset(name: "Nuevo color", hex: hex, style: .highlight))
             } label: {
-                Label("Añadir marcador", systemImage: "plus.circle")
+                Label("Añadir color", systemImage: "plus.circle")
             }
         } header: {
-            Text("Marcadores de «\(store.settings.activeProfile.name)»")
+            Text("Colores de «\(store.settings.activeProfile.name)»")
         } footer: {
-            Text("Color + estilo + significado. El orden es su lugar en la paleta y su tecla 1–9. Pulsa «Editar» para reordenar: pon arriba los que más usas.")
+            Text("El orden es su lugar en el dock y su tecla 1–9. Pulsa «Editar» para reordenar y pon primero los que más usas. Menos colores = decisiones más rápidas.")
         }
     }
 
-    private var speedSection: some View {
+    // MARK: - Etiquetas
+
+    private var tagsSection: some View {
         Section {
-            Toggle("Mantener pulsado = color temporal", isOn: $store.settings.springLoaded)
-            Toggle("Volver al marcador tras flecha, círculo, sello o comentario", isOn: $store.settings.autoReturn)
-            Toggle("Toque con 2 dedos = deshacer (3 = rehacer)", isOn: $store.settings.twoFingerUndo)
+            ForEach(store.settings.tags, id: \.self) { tag in
+                Label(tag, systemImage: "tag")
+            }
+            .onDelete { store.settings.tags.remove(atOffsets: $0) }
+            .onMove { store.settings.tags.move(fromOffsets: $0, toOffset: $1) }
+
+            Button {
+                showNewTag = true
+            } label: {
+                Label("Añadir etiqueta", systemImage: "plus.circle")
+            }
+            Toggle("Mostrar etiquetas al terminar de marcar", isOn: $store.settings.autoTagBar)
         } header: {
-            Text("Velocidad")
+            Text("Etiquetas clínicas")
         } footer: {
-            Text("Mantén pulsado un color con el pulgar izquierdo mientras marcas con el Pencil: al soltarlo vuelves al color anterior, sin tocar nada más.")
+            Text("Al levantar el Pencil aparece una barra con tus etiquetas: toca «Cx» o «Tx» y sigue leyendo. Luego filtra en Marcas, por ejemplo: todas las preguntas sobre complicaciones.")
+        }
+    }
+
+    // MARK: - Dock y Pencil
+
+    private var dockSection: some View {
+        Section {
+            Picker("Posición", selection: $store.settings.dockEdge) {
+                ForEach(DockEdge.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            Picker("Tamaño", selection: $store.settings.buttonSize) {
+                ForEach(ButtonSize.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        } header: {
+            Text("Dock de colores")
+        } footer: {
+            Text("También puedes arrastrarlo desde su asa: se pega al borde más cercano. Para usarlo con la mano izquierda, ponlo a la izquierda.")
         }
     }
 
@@ -133,39 +180,41 @@ struct SettingsView: View {
             Picker("Apretar (Pencil Pro)", selection: $store.settings.squeeze) {
                 ForEach(PencilAction.allCases) { Text($0.label).tag($0) }
             }
+            Toggle("Ver el color bajo la punta (hover)", isOn: $store.settings.pencilHover)
             Toggle("Anotar también con el dedo", isOn: $store.settings.fingerDrawing)
         } header: {
             Text("Apple Pencil")
         } footer: {
-            Text("Por defecto solo el Pencil anota y el dedo navega (la palma se ignora). Si activas «anotar con el dedo», desplázate con dos dedos.")
+            Text("Solo el Pencil anota y el dedo navega (la palma se ignora). El hover funciona en iPad con chip M2 o posterior y en iPad mini con Pencil Pro.")
         }
     }
 
-    private var paletteSection: some View {
+    private var speedSection: some View {
         Section {
-            Picker("Lado de la paleta", selection: $store.settings.paletteOnLeft) {
-                Text("Izquierda").tag(true)
-                Text("Derecha").tag(false)
+            Toggle("Mantener pulsado = color temporal", isOn: $store.settings.springLoaded)
+            Toggle("Volver al color tras flecha, sello o comentario", isOn: $store.settings.autoReturn)
+            Toggle("Dos dedos = deshacer (tres = rehacer)", isOn: $store.settings.twoFingerUndo)
+        } header: {
+            Text("Velocidad")
+        }
+    }
+
+    private var readingSection: some View {
+        Section {
+            Picker("Modo", selection: $store.settings.readingMode) {
+                ForEach(ReadingMode.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
-
-            Picker("Tamaño de botones", selection: $store.settings.buttonSize) {
-                ForEach(ButtonSize.allCases) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.segmented)
-
             VStack(alignment: .leading) {
-                Text("Opacidad del resaltador: \(Int(store.settings.highlightOpacity * 100)) %")
+                Text("Intensidad del resaltador: \(Int(store.settings.highlightOpacity * 100)) %")
                 Slider(value: $store.settings.highlightOpacity, in: 0.2...0.8)
             }
             VStack(alignment: .leading) {
-                Text("Grosor de lápiz, flechas y círculos: \(store.settings.penWidth, specifier: "%.1f") pt")
+                Text("Grosor de lápiz y flechas: \(store.settings.penWidth, specifier: "%.1f") pt")
                 Slider(value: $store.settings.penWidth, in: 0.5...6, step: 0.5)
             }
         } header: {
-            Text("Paleta y trazos")
-        } footer: {
-            Text("«Compacto» cabe mejor en el iPad mini en horizontal; «Grande» es más cómodo para el pulgar.")
+            Text("Lectura y trazos")
         }
     }
 
@@ -177,7 +226,7 @@ struct SettingsView: View {
         } header: {
             Text("Sellos")
         } footer: {
-            Text("Q = pregunta para Anki · Dx · Tx · Cx = complicación · Qx = quirúrgico · ⭐ = página clave · ❓ = duda. Mantén pulsado el botón de sello en la paleta para elegir otro.")
+            Text("Q = pregunta propia · ❗ = importante · ⭐ = página favorita · ❓ = duda para el adjunto · ✔︎ = repasada.")
         }
     }
 
@@ -189,18 +238,42 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - Filas y editor de un color
+
+struct PresetSwatch: View {
+    let preset: MarkPreset
+    var size: CGFloat = 30
+
+    var body: some View {
+        ZStack {
+            if preset.style == .highlight {
+                Circle().fill(Color(preset.color))
+            } else {
+                Circle().fill(Color(.systemBackground))
+                Circle().strokeBorder(Color(preset.color), lineWidth: 3.5)
+                Image(systemName: preset.style.symbol)
+                    .font(.system(size: size * 0.38, weight: .bold))
+                    .foregroundStyle(Color(preset.color))
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
 struct PresetRow: View {
     let preset: MarkPreset
 
     var body: some View {
         HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color(preset.color))
-                .frame(width: 30, height: 30)
-                .overlay(Image(systemName: preset.style.symbol).font(.caption.bold()).foregroundStyle(.black.opacity(0.7)))
-            VStack(alignment: .leading) {
+            PresetSwatch(preset: preset)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(preset.name)
-                Text(preset.style.label).font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Image(systemName: preset.action.symbol)
+                    Text("\(preset.style.label) · \(preset.action.destination)")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
         }
     }
@@ -218,21 +291,41 @@ struct PresetEditor: View {
 
     var body: some View {
         Form {
+            Section {
+                preview
+            }
             Section("Significado") {
                 TextField("Ej. Pregunta de examen", text: $preset.name)
             }
+            Section {
+                Picker("Acción", selection: $preset.action) {
+                    ForEach(ReviewAction.allCases) { action in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label(action.label, systemImage: action.symbol)
+                            Text(action.destination).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .tag(action)
+                    }
+                }
+                .pickerStyle(.inline)
+                .labelsHidden()
+            } header: {
+                Text("Qué harás con ello al repasar")
+            } footer: {
+                Text("Esto decide a qué lista o anexo va cada marca.")
+            }
             Section("Color") {
-                ColorPicker("Color personalizado", selection: colorBinding, supportsOpacity: false)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 12) {
                     ForEach(MarkPreset.swatches, id: \.self) { hex in
                         Circle()
                             .fill(Color(UIColor(hex: hex)))
                             .frame(width: 34, height: 34)
-                            .overlay(Circle().strokeBorder(Color.primary, lineWidth: preset.hex == hex ? 3 : 0))
+                            .overlay(Circle().strokeBorder(Color.primary, lineWidth: preset.hex == hex ? 3 : 0).padding(-3))
                             .onTapGesture { preset.hex = hex }
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 6)
+                ColorPicker("Otro color", selection: colorBinding, supportsOpacity: false)
             }
             Section("Estilo") {
                 Picker("Estilo", selection: $preset.style) {
@@ -240,10 +333,34 @@ struct PresetEditor: View {
                         Label(style.label, systemImage: style.symbol).tag(style)
                     }
                 }
-                .pickerStyle(.inline)
-                .labelsHidden()
+                .pickerStyle(.segmented)
             }
         }
         .navigationTitle(preset.name)
+    }
+
+    /// Vista previa de cómo queda en el texto.
+    private var preview: some View {
+        let color = Color(preset.color)
+        return HStack(spacing: 0) {
+            Text("La apendicitis es ")
+            Text("la urgencia quirúrgica más frecuente")
+                .padding(.horizontal, 2)
+                .background(preset.style == .highlight ? color.opacity(0.45) : Color.clear)
+                .overlay(alignment: preset.style == .strikeOut ? .center : .bottom) {
+                    if preset.style == .underline || preset.style == .strikeOut {
+                        Rectangle().fill(color).frame(height: 2)
+                    }
+                }
+                .overlay {
+                    if preset.style == .box {
+                        RoundedRectangle(cornerRadius: 2).strokeBorder(color, lineWidth: 1.5)
+                    }
+                }
+        }
+        .font(.system(.body, design: .serif))
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+        .padding(.vertical, 6)
     }
 }

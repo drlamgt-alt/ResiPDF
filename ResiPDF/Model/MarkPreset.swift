@@ -25,17 +25,93 @@ enum MarkStyle: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-/// Un "marcador rápido": color + estilo + significado (ej. Morado = Pregunta de examen).
+/// Qué harás con lo marcado al repasar. Es el corazón del sistema:
+/// el color indica una ACCIÓN de estudio, no solo un tema (ver GUIA_ESTUDIO.md).
+enum ReviewAction: String, Codable, CaseIterable, Identifiable {
+    case summary, question, memorize, connect, doubt, none
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .summary: return "Idea principal"
+        case .question: return "Pregunta de examen"
+        case .memorize: return "Memorizar literal"
+        case .connect: return "Conexión"
+        case .doubt: return "No lo entendí"
+        case .none: return "Sin acción"
+        }
+    }
+
+    /// Qué hace la app con este color.
+    var destination: String {
+        switch self {
+        case .summary: return "Va al resumen"
+        case .question: return "Se vuelve pregunta"
+        case .memorize: return "Se tapa en modo examen"
+        case .connect: return "Únelo con una flecha"
+        case .doubt: return "Va a la lista de dudas"
+        case .none: return "Solo marca"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .summary: return "text.alignleft"
+        case .question: return "questionmark.bubble"
+        case .memorize: return "brain.head.profile"
+        case .connect: return "link"
+        case .doubt: return "questionmark.circle"
+        case .none: return "circle.dashed"
+        }
+    }
+
+    /// Título de la sección al agrupar o exportar.
+    var sectionTitle: String {
+        switch self {
+        case .summary: return "Ideas principales"
+        case .question: return "Preguntas de examen"
+        case .memorize: return "Para memorizar"
+        case .connect: return "Conexiones"
+        case .doubt: return "Dudas"
+        case .none: return "Otras marcas"
+        }
+    }
+
+    var order: Int { ReviewAction.allCases.firstIndex(of: self) ?? 99 }
+}
+
+/// Un marcador: color + estilo + significado + acción de repaso.
 struct MarkPreset: Identifiable, Codable, Equatable, Hashable {
-    var id: UUID = UUID()
+    var id: UUID
     var name: String
     var hex: String
     var style: MarkStyle
+    var action: ReviewAction
 
     var color: UIColor { UIColor(hex: hex) }
+
+    init(id: UUID = UUID(), name: String, hex: String, style: MarkStyle, action: ReviewAction = .none) {
+        self.id = id
+        self.name = name
+        self.hex = hex
+        self.style = style
+        self.action = action
+    }
+
+    enum CodingKeys: String, CodingKey { case id, name, hex, style, action }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(UUID.self, forKey: .id)) ?? UUID()
+        name = (try? c.decode(String.self, forKey: .name)) ?? "Marcador"
+        hex = (try? c.decode(String.self, forKey: .hex)) ?? "#FFC94D"
+        style = (try? c.decode(MarkStyle.self, forKey: .style)) ?? .highlight
+        action = (try? c.decode(ReviewAction.self, forKey: .action)) ?? .none
+    }
 }
 
-/// Conjunto de marcadores para un tipo de libro (Cirugía, Atlas de anatomía…).
+/// Conjunto de marcadores (un «patrón de colores») para un tipo de libro.
 struct PresetProfile: Identifiable, Codable, Equatable, Hashable {
     var id: UUID = UUID()
     var name: String
@@ -43,67 +119,68 @@ struct PresetProfile: Identifiable, Codable, Equatable, Hashable {
 }
 
 extension PresetProfile {
-    /// Perfiles predefinidos (ver GUIA_ESTUDIO.md).
-    static var builtIn: [PresetProfile] { [surgery, anatomy, clinical, minimal] }
+    /// Patrones predefinidos. El primero es el recomendado.
+    static var builtIn: [PresetProfile] { [activeStudy, surgery, anatomy, clinical] }
 
-    /// Libros de cirugía (Schwartz, Sabiston, manuales, guías).
+    /// Recomendado: 5 colores, cada uno ligado a una acción de repaso.
+    /// El tema clínico (Dx, Tx, Cx…) va en etiquetas, no en más colores.
+    static var activeStudy: PresetProfile {
+        PresetProfile(name: "Estudio activo (5 colores)", presets: [
+            MarkPreset(name: "Idea principal", hex: "#FFC94D", style: .highlight, action: .summary),
+            MarkPreset(name: "Pregunta de examen", hex: "#B9A6FF", style: .highlight, action: .question),
+            MarkPreset(name: "Memorizar literal", hex: "#FF5A5F", style: .underline, action: .memorize),
+            MarkPreset(name: "Conexión", hex: "#6FD49A", style: .highlight, action: .connect),
+            MarkPreset(name: "No lo entendí", hex: "#A1A1AA", style: .underline, action: .doubt),
+        ])
+    }
+
+    /// Libros de cirugía por tema (Schwartz, Sabiston, manuales).
     static var surgery: PresetProfile {
-        PresetProfile(name: "Cirugía", presets: [
-            MarkPreset(name: "Concepto clave (high-yield)", hex: "#FFD400", style: .highlight),
-            MarkPreset(name: "Pregunta de examen", hex: "#B57BFF", style: .highlight),
-            MarkPreset(name: "Indicación quirúrgica / cuándo operar", hex: "#5EDC6E", style: .highlight),
-            MarkPreset(name: "Técnica y pasos quirúrgicos", hex: "#5AC8FA", style: .highlight),
-            MarkPreset(name: "Anatomía quirúrgica", hex: "#FF9F43", style: .highlight),
-            MarkPreset(name: "Clasificaciones y escalas", hex: "#FF8AC8", style: .highlight),
-            MarkPreset(name: "Complicaciones / red flags", hex: "#FF3B30", style: .underline),
-            MarkPreset(name: "Cifras, dosis y tiempos", hex: "#00B8A9", style: .underline),
-            MarkPreset(name: "No entiendo / repasar", hex: "#8E8E93", style: .underline),
+        PresetProfile(name: "Cirugía por tema (9 colores)", presets: [
+            MarkPreset(name: "Concepto clave", hex: "#FFC94D", style: .highlight, action: .summary),
+            MarkPreset(name: "Pregunta de examen", hex: "#B9A6FF", style: .highlight, action: .question),
+            MarkPreset(name: "Indicación quirúrgica", hex: "#6FD49A", style: .highlight, action: .summary),
+            MarkPreset(name: "Técnica y pasos", hex: "#7CC4FF", style: .highlight, action: .summary),
+            MarkPreset(name: "Anatomía quirúrgica", hex: "#FFB067", style: .highlight, action: .summary),
+            MarkPreset(name: "Clasificaciones y escalas", hex: "#FF9ECF", style: .highlight, action: .memorize),
+            MarkPreset(name: "Complicaciones", hex: "#FF5A5F", style: .underline, action: .question),
+            MarkPreset(name: "Cifras, dosis y tiempos", hex: "#2EC4B6", style: .underline, action: .memorize),
+            MarkPreset(name: "No lo entendí", hex: "#A1A1AA", style: .underline, action: .doubt),
         ])
     }
 
-    /// Atlas y anatomía quirúrgica: código de color clásico de las láminas.
+    /// Atlas: código de color clásico de las láminas.
     static var anatomy: PresetProfile {
-        PresetProfile(name: "Anatomía quirúrgica", presets: [
-            MarkPreset(name: "Arteria", hex: "#FF3B30", style: .highlight),
-            MarkPreset(name: "Vena", hex: "#5AC8FA", style: .highlight),
-            MarkPreset(name: "Nervio (¡no lesionar!)", hex: "#FFD400", style: .highlight),
-            MarkPreset(name: "Linfático / ganglios", hex: "#5EDC6E", style: .highlight),
-            MarkPreset(name: "Plano / reparo quirúrgico", hex: "#FF9F43", style: .highlight),
-            MarkPreset(name: "Pregunta de examen", hex: "#B57BFF", style: .highlight),
-            MarkPreset(name: "Variante anatómica", hex: "#FF8AC8", style: .underline),
-            MarkPreset(name: "No entiendo / repasar", hex: "#8E8E93", style: .underline),
+        PresetProfile(name: "Atlas de anatomía", presets: [
+            MarkPreset(name: "Arteria", hex: "#FF5A5F", style: .highlight, action: .memorize),
+            MarkPreset(name: "Vena", hex: "#7CC4FF", style: .highlight, action: .memorize),
+            MarkPreset(name: "Nervio (no lesionar)", hex: "#FFC94D", style: .highlight, action: .memorize),
+            MarkPreset(name: "Linfático", hex: "#6FD49A", style: .highlight, action: .memorize),
+            MarkPreset(name: "Plano o reparo", hex: "#FFB067", style: .highlight, action: .summary),
+            MarkPreset(name: "Pregunta de examen", hex: "#B9A6FF", style: .highlight, action: .question),
+            MarkPreset(name: "No lo entendí", hex: "#A1A1AA", style: .underline, action: .doubt),
         ])
     }
 
-    /// Materias clínicas (medicina interna, pediatría, GyO…).
+    /// Materias clínicas.
     static var clinical: PresetProfile {
-        PresetProfile(name: "Clínico (ENARM)", presets: [
-            MarkPreset(name: "Concepto clave (high-yield)", hex: "#FFD400", style: .highlight),
-            MarkPreset(name: "Pregunta de examen", hex: "#B57BFF", style: .highlight),
-            MarkPreset(name: "Diagnóstico", hex: "#5EDC6E", style: .highlight),
-            MarkPreset(name: "Tratamiento", hex: "#5AC8FA", style: .highlight),
-            MarkPreset(name: "Clínica / cuadro típico", hex: "#FF8AC8", style: .highlight),
-            MarkPreset(name: "Epidemiología / factores de riesgo", hex: "#FF9F43", style: .underline),
-            MarkPreset(name: "Cifras, dosis, alertas", hex: "#FF3B30", style: .underline),
-            MarkPreset(name: "No entiendo / repasar", hex: "#8E8E93", style: .underline),
-        ])
-    }
-
-    /// Para empezar o para lectura rápida.
-    static var minimal: PresetProfile {
-        PresetProfile(name: "Mínimo (4 colores)", presets: [
-            MarkPreset(name: "Concepto clave", hex: "#FFD400", style: .highlight),
-            MarkPreset(name: "Pregunta de examen", hex: "#B57BFF", style: .highlight),
-            MarkPreset(name: "Cifras / alertas", hex: "#FF3B30", style: .underline),
-            MarkPreset(name: "Repasar", hex: "#8E8E93", style: .underline),
+        PresetProfile(name: "Clínico (8 colores)", presets: [
+            MarkPreset(name: "Concepto clave", hex: "#FFC94D", style: .highlight, action: .summary),
+            MarkPreset(name: "Pregunta de examen", hex: "#B9A6FF", style: .highlight, action: .question),
+            MarkPreset(name: "Diagnóstico", hex: "#6FD49A", style: .highlight, action: .summary),
+            MarkPreset(name: "Tratamiento", hex: "#7CC4FF", style: .highlight, action: .summary),
+            MarkPreset(name: "Cuadro clínico", hex: "#FF9ECF", style: .highlight, action: .summary),
+            MarkPreset(name: "Epidemiología", hex: "#FFB067", style: .underline, action: .summary),
+            MarkPreset(name: "Cifras y dosis", hex: "#FF5A5F", style: .underline, action: .memorize),
+            MarkPreset(name: "No lo entendí", hex: "#A1A1AA", style: .underline, action: .doubt),
         ])
     }
 }
 
 extension MarkPreset {
-    /// Colores sugeridos para el editor de marcadores.
+    /// Colores sugeridos: tonos que funcionan como resaltador sin tapar el texto.
     static let swatches: [String] = [
-        "#FFD400", "#B57BFF", "#5EDC6E", "#5AC8FA", "#FF8AC8", "#FF9F43",
-        "#FF3B30", "#00B8A9", "#8E8E93", "#007AFF", "#AF52DE", "#A2845E",
+        "#FFC94D", "#B9A6FF", "#FF5A5F", "#6FD49A", "#A1A1AA", "#7CC4FF",
+        "#FFB067", "#FF9ECF", "#2EC4B6", "#9AD34B", "#5B8DEF", "#C9A27A",
     ]
 }

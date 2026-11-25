@@ -18,8 +18,9 @@ struct PDFCanvasView: UIViewRepresentable {
         view.displayDirection = .vertical
         view.autoScales = true
         view.pageShadowsEnabled = true
-        view.backgroundColor = .secondarySystemBackground
+        view.backgroundColor = .systemGroupedBackground
         view.document = document
+        Self.applyReadingMode(store.settings.readingMode, to: view)
 
         let controller = context.coordinator
         controller.editor = editor
@@ -36,6 +37,23 @@ struct PDFCanvasView: UIViewRepresentable {
         controller.store = store
         controller.undoManager = undoManager
         if view.document !== document { view.document = document }
+        Self.applyReadingMode(store.settings.readingMode, to: view)
         controller.applyInputMode()
+    }
+
+    static func applyReadingMode(_ mode: ReadingMode, to view: PDFView) {
+        switch mode {
+        case .continuous:
+            guard view.isUsingPageViewController || view.displayMode != .singlePageContinuous else { return }
+            view.usePageViewController(false, withViewOptions: nil)
+            view.displayMode = .singlePageContinuous
+            view.displayDirection = .vertical
+        case .paged:
+            guard !view.isUsingPageViewController else { return }
+            view.displayMode = .singlePage
+            view.displayDirection = .horizontal
+            view.usePageViewController(true, withViewOptions: nil)
+        }
+        view.autoScales = true
     }
 }

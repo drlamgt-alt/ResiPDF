@@ -84,23 +84,25 @@ enum DemoContent {
     // MARK: - Anotaciones de ejemplo
 
     private static func annotate(_ pdf: PDFDocument) {
-        let p = PresetProfile.surgery.presets
-        // 0 clave · 1 pregunta · 2 indicación · 3 técnica · 4 anatomía · 5 escalas
-        // 6 complicaciones · 7 cifras · 8 repasar
-        mark(pdf, "la urgencia quirúrgica abdominal más frecuente", p[0])
-        mark(pdf, "entre los 10 y los 30 años", p[7])
-        let artery = mark(pdf, "arteria apendicular", p[4])
-        let retrocecal = mark(pdf, "posición retrocecal", p[8])
-        mark(pdf, "migra a la fosa ilíaca derecha", p[0])
-        mark(pdf, "signo de Blumberg", p[5])
-        mark(pdf, "La escala de Alvarado", p[5])
-        let question = mark(pdf, "una puntuación de 7 o más sugiere apendicitis probable", p[1])
-        mark(pdf, "El tratamiento de elección es la apendicectomía", p[2])
-        mark(pdf, "dentro de los 60 minutos previos a la incisión", p[7])
-        mark(pdf, "la ligadura de la arteria apendicular", p[3])
-        mark(pdf, "La perforación es la complicación más grave", p[6])
-        mark(pdf, "La infección del sitio quirúrgico", p[6])
-        mark(pdf, "apendicectomía de intervalo", p[2])
+        addOutline(pdf)
+        let base = PresetProfile.activeStudy.presets
+        // 0 idea principal · 1 pregunta · 2 memorizar · 3 conexión · 4 duda
+        // `p` reparte esos 5 colores entre la flecha, el sello, el círculo y el comentario de abajo.
+        let p = [base[0], base[1], base[3], base[0], base[3], base[2], base[2], base[2], base[4]]
+        mark(pdf, "la urgencia quirúrgica abdominal más frecuente", base[0], tags: ["Epidemio"])
+        mark(pdf, "entre los 10 y los 30 años", base[2], tags: ["Epidemio"])
+        let artery = mark(pdf, "arteria apendicular", base[0], tags: ["Anatomía"])
+        let retrocecal = mark(pdf, "posición retrocecal", base[3], tags: ["Anatomía", "Dx"])
+        mark(pdf, "migra a la fosa ilíaca derecha", base[0], tags: ["Dx"])
+        mark(pdf, "signo de Blumberg", base[2], tags: ["Dx"])
+        mark(pdf, "La escala de Alvarado", base[1], tags: ["Clasificación"])
+        let question = mark(pdf, "una puntuación de 7 o más sugiere apendicitis probable", base[1], tags: ["Dx"])
+        mark(pdf, "El tratamiento de elección es la apendicectomía", base[0], tags: ["Tx", "Qx"])
+        mark(pdf, "dentro de los 60 minutos previos a la incisión", base[2], tags: ["Tx"])
+        mark(pdf, "la ligadura de la arteria apendicular", base[0], tags: ["Qx"])
+        mark(pdf, "La perforación es la complicación más grave", base[1], tags: ["Cx"])
+        mark(pdf, "La infección del sitio quirúrgico", base[2], tags: ["Cx"])
+        mark(pdf, "apendicectomía de intervalo", base[4])
 
         guard let page1 = pdf.page(at: 0) else { return }
 
@@ -174,8 +176,25 @@ enum DemoContent {
     }
 
     /// Marca una frase con el estilo del marcador. Devuelve el rectángulo que ocupa.
+    /// Índice del libro (aparece en la barra lateral).
+    private static func addOutline(_ pdf: PDFDocument) {
+        let root = PDFOutline()
+        let headings = ["Epidemiología", "Anatomía quirúrgica", "Cuadro clínico", "Diagnóstico",
+                        "Tratamiento", "Complicaciones", "Puntos clave para el examen"]
+        for (i, heading) in headings.enumerated() {
+            guard let sel = pdf.findString(heading, withOptions: []).first,
+                  let page = sel.pages.first else { continue }
+            let item = PDFOutline()
+            item.label = heading
+            let top = sel.bounds(for: page).maxY + 12
+            item.destination = PDFDestination(page: page, at: CGPoint(x: 0, y: top))
+            root.insertChild(item, at: min(i, root.numberOfChildren))
+        }
+        pdf.outlineRoot = root
+    }
+
     @discardableResult
-    private static func mark(_ pdf: PDFDocument, _ phrase: String, _ preset: MarkPreset) -> Marked? {
+    private static func mark(_ pdf: PDFDocument, _ phrase: String, _ preset: MarkPreset, tags: [String] = []) -> Marked? {
         guard let sel = pdf.findString(phrase, withOptions: .caseInsensitive).first,
               let page = sel.pages.first else { return nil }
         var union = CGRect.null
@@ -200,6 +219,7 @@ enum DemoContent {
                 ]
             }
             a.setValue("\(group)#\(i)", forAnnotationKey: .name)
+            AnnotationTags.setTags(tags, on: a)
             if i == 0 { a.contents = phrase }
             page.addAnnotation(a)
             union = union.union(r)

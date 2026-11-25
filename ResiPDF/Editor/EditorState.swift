@@ -15,36 +15,54 @@ struct NoteRequest: Identifiable {
     let onDelete: () -> Void
 }
 
-/// Estado del editor de un documento (herramienta activa, color, avisos).
+/// Petición para etiquetar (Dx, Tx, Cx…) la marca recién hecha.
+struct TagRequest: Identifiable {
+    let id = UUID()
+    let groupID: String
+    /// Punto en coordenadas de la vista PDF donde mostrar la barra.
+    let point: CGPoint
+    var tags: [String]
+    let apply: ([String]) -> Void
+}
+
+/// Estado del editor de un documento (herramienta activa, color, avisos, página).
 final class EditorState: ObservableObject {
     @Published var tool: Tool = .navigate
-    @Published var currentHex: String = "#FFD400"
+    @Published var currentHex: String = "#FFC94D"
     @Published var toast: String?
     @Published var noteRequest: NoteRequest?
     /// Punto (coordenadas de la vista PDF) donde mostrar la rueda de colores junto al lápiz.
     @Published var quickPalettePoint: CGPoint?
-    /// Paleta plegada (ocupa menos espacio a un lado del PDF).
-    @Published var paletteCollapsed = false
+    @Published var tagRequest: TagRequest?
+    @Published var dockCollapsed = false
+    @Published var currentPageIndex = 0
+    @Published var currentPageIsFavorite = false
+    /// Aumenta cada vez que cambian las anotaciones (para refrescar listas).
+    @Published var annotationsVersion = 0
 
+    /// Última marca hecha: el botón de etiquetas del dock la etiqueta.
+    var lastTagTarget: TagRequest?
     private(set) var previousTool: Tool = .navigate
     /// Última posición del Pencil, para abrir la rueda de colores ahí.
     var lastPencilPoint: CGPoint?
     weak var pdfView: PDFView?
+    /// Lo asigna el motor de anotación.
+    var toggleFavorite: (() -> Void)?
     private var toastWork: DispatchWorkItem?
 
     func select(_ newTool: Tool, store: SettingsStore, announce: Bool = true) {
         if newTool != tool { previousTool = tool }
         tool = newTool
-        var message: String
+        let message: String
         switch newTool {
         case .preset(let id):
             guard let p = store.preset(id: id) else { return }
             currentHex = p.hex
-            message = "\(p.style.label) · \(p.name)"
+            message = "\(p.name) · \(p.action.destination)"
         case .navigate: message = "Navegar (el Pencil no anota)"
         case .pen: message = "Lápiz libre"
         case .arrow: message = "Flecha"
-        case .circle: message = "Círculo / óvalo"
+        case .circle: message = "Círculo"
         case .note: message = "Comentario: toca donde quieras"
         case .stamp: message = "Sello «\(store.settings.currentStamp)»: toca para colocar"
         case .mask: message = "Tapa: arrastra sobre lo que quieras ocultar"
@@ -98,7 +116,7 @@ final class EditorState: ObservableObject {
             withAnimation { self?.toast = nil }
         }
         toastWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: work)
     }
 
     func go(to page: PDFPage) {
@@ -117,6 +135,6 @@ final class EditorState: ObservableObject {
     func setAllMasks(revealed: Bool) {
         guard let pdf = pdfView?.document else { return }
         MaskStyle.setAll(in: pdf, revealed: revealed)
-        showToast(revealed ? "Tapas destapadas" : "Tapas cubiertas: ¡a evaluarte!")
+        showToast(revealed ? "Tapas destapadas" : "Tapas cubiertas: a evaluarte")
     }
 }

@@ -24,7 +24,10 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
     private let maskTap = UITapGestureRecognizer()
     private let undoTap = UITapGestureRecognizer()
     private let redoTap = UITapGestureRecognizer()
+    private let hover = UIHoverGestureRecognizer()
     private let preview = CAShapeLayer()
+    /// Punto del color activo bajo la punta del Pencil (iPad con hover).
+    private let hoverDot = CAShapeLayer()
 
     private enum Mode {
         case none
@@ -53,7 +56,8 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
     static let groupPrefix = "resi:"
     static let stampPrefix = "resistamp:"
 
-    private var ownRecognizers: [UIGestureRecognizer] { [stroke, maskTap, undoTap, redoTap] }
+    private var ownRecognizers: [UIGestureRecognizer] { [stroke, maskTap, undoTap, redoTap, hover] }
+    static let favoriteSymbol = "⭐"
 
     // MARK: - Configuración
 
@@ -93,9 +97,19 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
         preview.zPosition = 1_000
         view.layer.addSublayer(preview)
 
+        hoverDot.zPosition = 1_001
+        hoverDot.isHidden = true
+        hoverDot.lineWidth = 1.5
+        hoverDot.strokeColor = UIColor.white.withAlphaComponent(0.9).cgColor
+        view.layer.addSublayer(hoverDot)
+        hover.addTarget(self, action: #selector(handleHover(_:)))
+        view.addGestureRecognizer(hover)
+
         let pencil = UIPencilInteraction()
         pencil.delegate = self
         view.addInteraction(pencil)
+
+        editor.toggleFavorite = { [weak self] in self?.toggleFavoriteOnCurrentPage() }
 
         let nc = NotificationCenter.default
         for name in [Notification.Name.PDFViewPageChanged,
@@ -105,10 +119,52 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
             nc.addObserver(self, selector: #selector(viewDidChange), name: name, object: view)
         }
         applyInputMode()
+        DispatchQueue.main.async { [weak self] in self?.updatePageState() }
     }
 
     @objc private func viewDidChange() {
         applyInputMode()
+        DispatchQueue.main.async { [weak self] in self?.updatePageState() }
+    }
+
+    /// Página actual y si es favorita (para el indicador y la estrella).
+    private func updatePageState() {
+        guard let view = pdfView, let doc = view.document, let page = view.currentPage else { return }
+        let index = doc.index(for: page)
+        if editor.currentPageIndex != index { editor.currentPageIndex = index }
+        let favorite = favoriteStamp(on: page) != nil
+        if editor.currentPageIsFavorite != favorite { editor.currentPageIsFavorite = favorite }
+    }
+
+    // MARK: - Hover del Pencil (iPad Pro M2+ / Pencil Pro)
+
+    @objc private func handleHover(_ g: UIHoverGestureRecognizer) {
+        guard let view = pdfView, store.settings.pencilHover, editor.tool != .navigate else {
+            hoverDot.isHidden = true
+            return
+        }
+        switch g.state {
+        case .began, .changed:
+            // zOffset > 0 solo con el Pencil sobre la pantalla (no con ratón o trackpad).
+            guard g.zOffset > 0 else { hoverDot.isHidden = true; return }
+            let p = g.location(in: view)
+            let color: UIColor
+            switch currentMode() {
+            case .mark(let preset): color = preset.color
+            case .eraser: color = .systemGray
+            case .mask: color = MaskStyle.border
+            default: color = UIColor(hex: editor.currentHex)
+            }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            hoverDot.frame = view.bounds
+            hoverDot.path = UIBezierPath(ovalIn: CGRect(x: p.x - 6, y: p.y - 6, width: 12, height: 12)).cgPath
+            hoverDot.fillColor = color.cgColor
+            hoverDot.isHidden = false
+            CATransaction.commit()
+        default:
+            hoverDot.isHidden = true
+        }
     }
 
     /// Con una herramienta activa: el Pencil anota y los gestos internos de
@@ -239,6 +295,8 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
 
     private func begin(at p: CGPoint, in view: PDFView) {
         if editor.quickPalettePoint != nil { editor.quickPalettePoint = nil }
+        if editor.tagRequest != nil { editor.tagRequest = nil }
+        hoverDot.isHidden = true
         mode = currentMode()
         startPoint = p
         points = [p]
@@ -322,9 +380,12 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
         switch mode {
         case .mark(let preset):
             if !tempMarks.isEmpty {
-                commitTextMarks(on: page)
+                commitTextMarks(on: page, near: end)
             } else if let ann = makeFallbackMark(preset, from: startPoint, to: end, page: page, view: view) {
+                let group = Self.groupPrefix + UUID().uuidString
+                ann.setValue("\(group)#0", forAnnotationKey: .name)
                 add(ann, to: page, actionName: preset.style.label)
+                offerTags(group: group, page: page, at: end)
             }
         case .pen(let color):
             if let ann = makeInk(viewPoints: points, page: page, view: view, color: color,
@@ -416,8 +477,9 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
         }
     }
 
-    private func commitTextMarks(on page: PDFPage) {
+    private func commitTextMarks(on page: PDFPage, near point: CGPoint) {
         let group = Self.groupPrefix + UUID().uuidString
+        defer { offerTags(group: group, page: page, at: point) }
         for (i, ann) in tempMarks.enumerated() {
             ann.setValue("\(group)#\(i)", forAnnotationKey: .name)
             ann.userName = "ResiPDF"
@@ -531,20 +593,71 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
 
     private func addStamp(_ text: String, at viewPoint: CGPoint, page: PDFPage, view: PDFView, color: UIColor) {
         let p = view.convert(viewPoint, to: page)
-        let size = (text as NSString).size(withAttributes: [.font: Self.stampFont])
+        let ann = Self.makeStamp(text, centeredAt: p, color: color)
+        add(ann, to: page, actionName: "Sello")
+    }
+
+    static func makeStamp(_ text: String, centeredAt p: CGPoint, color: UIColor) -> PDFAnnotation {
+        let size = (text as NSString).size(withAttributes: [.font: stampFont])
         let w = ceil(size.width) + 12
         let h = ceil(size.height) + 6
         let ann = PDFAnnotation(bounds: CGRect(x: p.x - w / 2, y: p.y - h / 2, width: w, height: h),
                                 forType: .freeText, withProperties: nil)
         ann.contents = text
-        ann.font = Self.stampFont
+        ann.font = stampFont
         ann.fontColor = .black
         ann.color = color.withAlphaComponent(0.35)
         ann.alignment = .center
-        ann.border = Self.border(0.8)
-        ann.setValue(Self.stampPrefix + UUID().uuidString, forAnnotationKey: .name)
+        ann.border = border(0.8)
+        ann.setValue(stampPrefix + UUID().uuidString, forAnnotationKey: .name)
         ann.userName = "ResiPDF"
-        add(ann, to: page, actionName: "Sello")
+        return ann
+    }
+
+    // MARK: - Páginas favoritas (sello ⭐ en la esquina)
+
+    private func favoriteStamp(on page: PDFPage) -> PDFAnnotation? {
+        page.annotations.first { Self.isStamp($0) && $0.contents == Self.favoriteSymbol }
+    }
+
+    private func toggleFavoriteOnCurrentPage() {
+        guard let page = pdfView?.currentPage else { return }
+        if let star = favoriteStamp(on: page) {
+            removeAnnotations([PlacedAnnotation(page: page, annotation: star)], actionName: "Quitar favorita")
+            editor.showToast("Página quitada de favoritas")
+        } else {
+            let b = page.bounds(for: .cropBox)
+            let star = Self.makeStamp(Self.favoriteSymbol, centeredAt: CGPoint(x: b.maxX - 26, y: b.maxY - 22),
+                                      color: UIColor(hex: "#FFC94D"))
+            add(star, to: page, actionName: "Página favorita")
+            editor.showToast("Página añadida a favoritas")
+        }
+        updatePageState()
+    }
+
+    // MARK: - Etiquetas (Dx, Tx, Cx…)
+
+    private func offerTags(group: String, page: PDFPage, at viewPoint: CGPoint) {
+        let request = TagRequest(groupID: group, point: viewPoint, tags: []) { [weak self] tags in
+            self?.setTags(tags, group: group, page: page)
+        }
+        editor.lastTagTarget = request
+        if store.settings.autoTagBar && !store.settings.tags.isEmpty {
+            editor.tagRequest = request
+        }
+    }
+
+    func setTags(_ tags: [String], group: String, page: PDFPage) {
+        let members = page.annotations.filter { Self.groupID(of: $0) == group }
+        guard let first = members.first else { return }
+        let old = AnnotationTags.tags(of: first)
+        members.forEach { AnnotationTags.setTags(tags, on: $0) }
+        undoManager?.registerUndo(withTarget: self) { target in
+            target.setTags(old, group: group, page: page)
+        }
+        undoManager?.setActionName("Etiquetas")
+        if editor.lastTagTarget?.groupID == group { editor.lastTagTarget?.tags = tags }
+        editor.annotationsVersion += 1
     }
 
     static func isStamp(_ a: PDFAnnotation) -> Bool {
@@ -652,6 +765,7 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
     // MARK: - Deshacer / rehacer (también marca el documento como modificado => autoguardado)
 
     private func registerAdded(_ items: [PlacedAnnotation], actionName: String) {
+        editor.annotationsVersion += 1
         guard let um = undoManager else { return }
         um.registerUndo(withTarget: self) { target in
             target.removeAnnotations(items, actionName: actionName)
@@ -661,6 +775,8 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
 
     func removeAnnotations(_ items: [PlacedAnnotation], actionName: String) {
         for item in items { item.page.removeAnnotation(item.annotation) }
+        editor.annotationsVersion += 1
+        updatePageState()
         undoManager?.registerUndo(withTarget: self) { target in
             target.addAnnotations(items, actionName: actionName)
         }
@@ -670,6 +786,7 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
     func addAnnotations(_ items: [PlacedAnnotation], actionName: String) {
         for item in items { item.page.addAnnotation(item.annotation) }
         registerAdded(items, actionName: actionName)
+        updatePageState()
     }
 
     // MARK: - Geometría y vista previa
