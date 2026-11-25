@@ -23,6 +23,8 @@ final class EditorState: ObservableObject {
     @Published var noteRequest: NoteRequest?
     /// Punto (coordenadas de la vista PDF) donde mostrar la rueda de colores junto al lápiz.
     @Published var quickPalettePoint: CGPoint?
+    /// Paleta plegada (ocupa menos espacio a un lado del PDF).
+    @Published var paletteCollapsed = false
 
     private(set) var previousTool: Tool = .navigate
     /// Última posición del Pencil, para abrir la rueda de colores ahí.

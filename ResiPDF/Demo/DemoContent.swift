@@ -89,8 +89,8 @@ enum DemoContent {
         // 6 complicaciones · 7 cifras · 8 repasar
         mark(pdf, "la urgencia quirúrgica abdominal más frecuente", p[0])
         mark(pdf, "entre los 10 y los 30 años", p[7])
-        let artery = mark(pdf, "arteria apendicular, rama de la arteria ileocólica", p[4])
-        let retrocecal = mark(pdf, "La posición retrocecal es la más común", p[8])
+        let artery = mark(pdf, "arteria apendicular", p[4])
+        let retrocecal = mark(pdf, "posición retrocecal", p[8])
         mark(pdf, "migra a la fosa ilíaca derecha", p[0])
         mark(pdf, "signo de Blumberg", p[5])
         mark(pdf, "La escala de Alvarado", p[5])

@@ -18,8 +18,18 @@ struct FloatingPalette: View {
     var undoManager: UndoManager?
 
     @State private var drag: CGSize = .zero
-    @State private var collapsed = false
     @State private var paletteHeight: CGFloat = 0
+
+    private var collapsed: Bool {
+        get { editor.paletteCollapsed }
+        nonmutating set { editor.paletteCollapsed = newValue }
+    }
+
+    /// Ancho que ocupa la paleta (el PDF deja este espacio libre a su lado).
+    static func reservedWidth(buttonSize: CGFloat, collapsed: Bool) -> CGFloat {
+        let panel = collapsed ? buttonSize + 16 : buttonSize * 2 + 8 + 16
+        return panel + 12 + 8
+    }
 
     // Modo resorte
     @State private var pressedID: UUID?
@@ -44,7 +54,7 @@ struct FloatingPalette: View {
 
             panel(geo: geo, baseX: baseX, baseY: baseY)
                 .frame(width: width)
-                .frame(maxHeight: max(geo.size.height - 16, 100))
+                .fixedSize(horizontal: false, vertical: true)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -104,12 +114,7 @@ struct FloatingPalette: View {
             if collapsed {
                 collapsedBody
             } else {
-                ViewThatFits(in: .vertical) {
-                    VStack(spacing: gap) { expandedBody }
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: gap) { expandedBody }
-                    }
-                }
+                VStack(spacing: gap) { expandedBody }
             }
         }
         .padding(8)

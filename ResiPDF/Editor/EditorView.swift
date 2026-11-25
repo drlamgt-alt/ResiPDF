@@ -14,12 +14,15 @@ struct EditorView: View {
     var body: some View {
         ZStack {
             PDFCanvasView(document: document.pdf, editor: editor, store: store, undoManager: undoManager)
+                .padding(store.settings.paletteOnLeft ? .leading : .trailing, paletteInset)
                 .ignoresSafeArea(edges: .bottom)
+                .animation(.spring(response: 0.3), value: paletteInset)
 
             FloatingPalette(editor: editor, undoManager: undoManager)
 
             if let point = editor.quickPalettePoint {
-                QuickRing(center: point, editor: editor)
+                QuickRing(center: CGPoint(x: point.x + (store.settings.paletteOnLeft ? paletteInset : 0), y: point.y),
+                          editor: editor)
                     .ignoresSafeArea(edges: .bottom)
             }
         }
@@ -86,6 +89,12 @@ struct EditorView: View {
         .onChange(of: store.settings.activeProfileID) { _, _ in
             editor.selectFirstPreset(store: store)
         }
+    }
+
+    /// Espacio que el PDF deja libre para que la paleta no tape el texto.
+    private var paletteInset: CGFloat {
+        FloatingPalette.reservedWidth(buttonSize: store.settings.buttonSize.points,
+                                      collapsed: editor.paletteCollapsed)
     }
 
     /// Solo para las capturas automáticas (modo `-demo`).
