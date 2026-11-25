@@ -4,7 +4,7 @@ import PDFKit
 enum Tool: Hashable {
     case navigate
     case preset(UUID)
-    case pen, arrow, circle, note, stamp, mask, eraser
+    case pen, arrow, circle, note, stamp, mask, eraser, crop
 }
 
 struct NoteRequest: Identifiable {
@@ -48,6 +48,8 @@ final class EditorState: ObservableObject {
     weak var pdfView: PDFView?
     /// Lo asigna el motor de anotación.
     var toggleFavorite: (() -> Void)?
+    /// Recibe cada figura recortada del PDF (imagen e índice de página) para el cuaderno.
+    var onFigure: ((UIImage, Int) -> Void)?
     private var toastWork: DispatchWorkItem?
 
     func select(_ newTool: Tool, store: SettingsStore, announce: Bool = true) {
@@ -67,6 +69,7 @@ final class EditorState: ObservableObject {
         case .stamp: message = "Sello «\(store.settings.currentStamp)»: toca para colocar"
         case .mask: message = "Tapa: arrastra sobre lo que quieras ocultar"
         case .eraser: message = "Borrador"
+        case .crop: message = "Recortar: enmarca la figura con el Pencil"
         }
         if announce { showToast(message) }
     }

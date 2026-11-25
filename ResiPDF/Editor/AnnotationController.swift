@@ -39,6 +39,7 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
         case stamp(UIColor, String)
         case mask
         case eraser
+        case crop
     }
 
     // Estado del trazo en curso
@@ -290,6 +291,7 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
         case .stamp: return .stamp(color, store.settings.currentStamp)
         case .mask: return .mask
         case .eraser: return .eraser
+        case .crop: return .crop
         }
     }
 
@@ -306,6 +308,7 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
         tempText = ""
         preview.frame = view.bounds
         preview.fillColor = nil
+        preview.lineDashPattern = nil
         setPreview(nil)
 
         let scale = view.scaleFactor
@@ -322,6 +325,11 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
             preview.strokeColor = MaskStyle.border.cgColor
             preview.fillColor = MaskStyle.fill.withAlphaComponent(0.85).cgColor
             preview.lineWidth = 1
+        case .crop:
+            preview.strokeColor = UIColor.systemBlue.cgColor
+            preview.fillColor = UIColor.systemBlue.withAlphaComponent(0.08).cgColor
+            preview.lineWidth = 1.5
+            preview.lineDashPattern = [6, 4]
         case .eraser:
             erase(at: p, in: view)
         default:
@@ -344,7 +352,7 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
             setPreview(arrowPath(from: startPoint, to: end, lineWidth: preview.lineWidth).cgPath)
         case .circle:
             setPreview(UIBezierPath(ovalIn: Self.rect(startPoint, end)).cgPath)
-        case .mask:
+        case .mask, .crop:
             setPreview(UIBezierPath(rect: Self.rect(startPoint, end)).cgPath)
         case .eraser:
             for pt in newPoints { erase(at: pt, in: view) }
@@ -419,6 +427,13 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
             editor.finishOneShot(store: store)
         case .note(let color):
             handleNoteTap(at: end, page: page, color: color, in: view)
+        case .crop:
+            guard moved else { break }
+            let rect = pageRect(startPoint, end, page: page, view: view)
+            if let image = FigureCropper.image(of: page, rect: rect), let doc = view.document {
+                editor.onFigure?(image, doc.index(for: page))
+            }
+            editor.finishOneShot(store: store)
         default:
             break
         }

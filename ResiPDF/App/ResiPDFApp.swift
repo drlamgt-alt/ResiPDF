@@ -20,7 +20,8 @@ struct ResiPDFApp: App {
         // DocumentGroup abre el PDF directamente desde Archivos (iCloud Drive,
         // En mi iPad, Google Drive, etc.) y guarda los cambios en el MISMO archivo.
         DocumentGroup(newDocument: { PDFFileDocument() }) { file in
-            EditorView(document: file.document)
+            EditorView(document: file.document,
+                       bookName: file.fileURL?.deletingPathExtension().lastPathComponent ?? "Sin título")
                 .environmentObject(store)
         }
     }

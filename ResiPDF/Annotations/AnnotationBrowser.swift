@@ -63,7 +63,7 @@ struct AnnotationBrowser: View {
                 .listStyle(.plain)
             }
         }
-        .task(id: refreshToken) { items = collect() }
+        .task(id: refreshToken) { items = Self.collect(pdf: pdf, store: store) }
     }
 
     private var filters: some View {
@@ -142,7 +142,7 @@ struct AnnotationBrowser: View {
 
     // MARK: - Recolección
 
-    private func collect() -> [AnnotationItem] {
+    static func collect(pdf: PDFDocument, store: SettingsStore) -> [AnnotationItem] {
         let textTypes: Set<String> = ["Highlight", "Underline", "StrikeOut", "Squiggly", "Square"]
         let kinds: [String: String] = [
             "Highlight": "Resaltado", "Underline": "Subrayado", "StrikeOut": "Tachado",
@@ -191,7 +191,7 @@ struct AnnotationBrowser: View {
     }
 
     /// Primer renglón con texto de la página (para identificar dónde está un sello).
-    private func pageSnippet(_ page: PDFPage) -> String {
+    private static func pageSnippet(_ page: PDFPage) -> String {
         let text = page.string ?? ""
         let line = text.split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }

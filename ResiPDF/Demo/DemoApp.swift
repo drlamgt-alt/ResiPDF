@@ -9,7 +9,7 @@ struct DemoApp: App {
     var body: some Scene {
         WindowGroup {
             NavigationStack {
-                EditorView(document: document)
+                EditorView(document: document, bookName: "Apendicitis aguda")
                     .navigationTitle("Apendicitis aguda.pdf")
                     .navigationBarTitleDisplayMode(.inline)
             }

@@ -16,18 +16,50 @@ struct EditorView: View {
     @State private var showGoToPage = false
     @State private var goToPageText = ""
 
+    // Cuaderno del libro
+    @StateObject private var notebook: NotebookStore
+    @State private var showNotebook = false
+    @State private var notebookFull = false
+    @State private var showNotebookPrompt = false
+    @State private var promptIsAutomatic = false
+
+    init(document: PDFFileDocument, bookName: String) {
+        _document = ObservedObject(wrappedValue: document)
+        _notebook = StateObject(wrappedValue: NotebookStore(bookName: bookName))
+    }
+
     var body: some View {
         HStack(spacing: 0) {
-            if showSidebar {
+            if showSidebar && !(showNotebook && notebookFull) {
                 SidebarView(pdf: document.pdf, editor: editor, store: store, initialTab: sidebarTab)
                     .frame(width: 320)
                     .transition(.move(edge: .leading))
                 Divider()
             }
-            ZStack {
-                canvas
-                DockView(editor: editor, undoManager: undoManager) { dockSize = $0 }
+            if !(showNotebook && notebookFull) {
+                ZStack {
+                    canvas
+                    DockView(editor: editor, undoManager: undoManager) { dockSize = $0 }
+                }
             }
+            if showNotebook {
+                Divider()
+                notebookPanel
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showNotebook)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: notebookFull)
+        .alert("¿Crear un cuaderno para este libro?", isPresented: $showNotebookPrompt) {
+            Button("Crear cuaderno") {
+                notebook.create()
+                showNotebook = true
+            }
+            if promptIsAutomatic {
+                Button("No volver a preguntar") { notebook.promptDeclined = true }
+            }
+            Button("Ahora no", role: .cancel) {}
+        } message: {
+            Text("Hojas para escribir con el Pencil (plantilla Cornell) y anexos que se llenan solos con tus preguntas de examen, lo que hay que memorizar, figuras recortadas y dudas.")
         }
         .overlay(alignment: .top) { toastView }
         .animation(.easeOut(duration: 0.2), value: editor.toast)
@@ -66,10 +98,60 @@ struct EditorView: View {
         .onAppear {
             // Al abrir un PDF ya queda listo el primer color: Pencil marca, dedo navega.
             if editor.tool == .navigate { editor.selectFirstPreset(store: store) }
+            editor.onFigure = { image, pageIndex in saveFigure(image, pageIndex: pageIndex) }
+            offerNotebookIfNeeded()
             openDemoScreenIfRequested()
         }
+        .onDisappear { notebook.saveNow() }
         .onChange(of: store.settings.activeProfileID) { _, _ in
             editor.selectFirstPreset(store: store)
+        }
+    }
+
+    // MARK: - Cuaderno
+
+    private var notebookPanel: some View {
+        NotebookView(store: notebook, editor: editor, settings: store, pdf: document.pdf,
+                     fullScreen: $notebookFull) {
+            notebook.saveNow()
+            showNotebook = false
+            notebookFull = false
+        }
+        .containerRelativeFrame(.horizontal) { width, _ in
+            notebookFull ? width : max(360, width * 0.46)
+        }
+        .transition(.move(edge: .trailing))
+    }
+
+    private func toggleNotebook() {
+        if notebook.exists {
+            showNotebook.toggle()
+        } else {
+            promptIsAutomatic = false
+            showNotebookPrompt = true
+        }
+    }
+
+    /// Al abrir un libro sin cuaderno, ofrece crearlo (salvo que se haya dicho «No volver a preguntar»).
+    private func offerNotebookIfNeeded() {
+        guard !ProcessInfo.processInfo.arguments.contains("-demo"),
+              !notebook.exists, !notebook.promptDeclined else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            promptIsAutomatic = true
+            showNotebookPrompt = true
+        }
+    }
+
+    private func saveFigure(_ image: UIImage, pageIndex: Int) {
+        guard let figure = notebook.addFigure(image, sourcePage: pageIndex) else {
+            editor.showToast("No se pudo guardar la figura")
+            return
+        }
+        if showNotebook, let pageID = notebook.currentPageID {
+            notebook.insert(figure, into: pageID)
+            editor.showToast("Figura insertada en el cuaderno")
+        } else {
+            editor.showToast("Figura guardada en el cuaderno · Anexo C")
         }
     }
 
@@ -162,6 +244,11 @@ struct EditorView: View {
             }
             .keyboardShortcut("f", modifiers: .command)
 
+            Button { toggleNotebook() } label: {
+                Label("Cuaderno", systemImage: showNotebook ? "book.pages.fill" : "book.pages")
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+
             Button { editor.toggleFavorite?() } label: {
                 Label("Página favorita", systemImage: editor.currentPageIsFavorite ? "star.fill" : "star")
             }
@@ -223,6 +310,11 @@ struct EditorView: View {
             if args.contains("-demoRing") {
                 let bounds = editor.pdfView?.bounds ?? CGRect(x: 0, y: 0, width: 800, height: 1000)
                 editor.quickPalettePoint = CGPoint(x: bounds.midX + 120, y: bounds.midY - 80)
+            }
+            if args.contains("-demoNotebook") || args.contains("-demoAnnex") {
+                DemoNotebook.populate(notebook, pdf: document.pdf)
+                if args.contains("-demoAnnex") { notebook.requestedSection = .annex(.questions) }
+                showNotebook = true
             }
             if args.contains("-demoTags") {
                 let bounds = editor.pdfView?.bounds ?? CGRect(x: 0, y: 0, width: 800, height: 1000)

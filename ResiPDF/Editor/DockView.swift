@@ -338,6 +338,7 @@ struct DockView: View {
         case .stamp: return "seal"
         case .mask: return "rectangle.fill.on.rectangle.fill"
         case .navigate: return "hand.point.up.left"
+        case .crop: return "crop"
         default: return nil
         }
     }
@@ -350,6 +351,7 @@ struct DockView: View {
                 toolItem(.circle, "Círculo", "circle")
                 toolItem(.note, "Comentario", "text.bubble")
                 toolItem(.mask, "Tapa de autoevaluación", "rectangle.fill.on.rectangle.fill")
+                toolItem(.crop, "Recortar figura al cuaderno", "crop")
                 toolItem(.navigate, "Navegar (el Pencil no anota)", "hand.point.up.left")
             }
             Section("Sellos") {

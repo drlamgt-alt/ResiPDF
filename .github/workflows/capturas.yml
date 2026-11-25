@@ -74,6 +74,8 @@ jobs:
           shoot "$PRO"  4-marcas -demoMarks
           shoot "$PRO"  5-preferencias -demoSettings
           shoot "$PRO"  6-rueda-de-colores -demoRing
+          shoot "$PRO"  8-cuaderno -demoNotebook
+          shoot "$PRO"  9-anexo-preguntas -demoAnnex
           shoot "$MINI" 7-editor-ipad-mini
           ls -la capturas
 
