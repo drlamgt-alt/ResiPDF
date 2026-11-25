@@ -1,6 +1,18 @@
 import SwiftUI
 
+/// Punto de entrada: con el argumento `-demo` abre un capítulo de ejemplo ya anotado
+/// (se usa para generar capturas de pantalla automáticas en GitHub).
 @main
+enum AppLauncher {
+    static func main() {
+        if CommandLine.arguments.contains("-demo") {
+            DemoApp.main()
+        } else {
+            ResiPDFApp.main()
+        }
+    }
+}
+
 struct ResiPDFApp: App {
     @StateObject private var store = SettingsStore()
 

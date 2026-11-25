@@ -1,0 +1,91 @@
+# Abre ResiPDF en el simulador de iPad (Pro y mini) con un capítulo de ejemplo
+# y publica capturas de pantalla en Releases → «capturas».
+name: Capturas
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  capturas:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar XcodeGen y generar proyecto
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Elegir simuladores de iPad
+        run: |
+          DEVICES=$(xcrun simctl list devices available -j)
+          PRO=$(echo "$DEVICES" | jq -r '[.devices[][] | select(.name|test("iPad Pro 13"))][0].udid')
+          MINI=$(echo "$DEVICES" | jq -r '[.devices[][] | select(.name|test("iPad mini"))][0].udid')
+          echo "PRO=$PRO" >> "$GITHUB_ENV"
+          echo "MINI=$MINI" >> "$GITHUB_ENV"
+          echo "iPad Pro: $PRO"
+          echo "iPad mini: $MINI"
+
+      - name: Compilar para el simulador
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ResiPDF.xcodeproj \
+            -scheme ResiPDF \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$PRO" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tee build.log | tail -5
+
+      - name: Tomar capturas
+        run: |
+          APP=build/Build/Products/Debug-iphonesimulator/ResiPDF.app
+          mkdir -p capturas
+          for DEV in "$PRO" "$MINI"; do
+            xcrun simctl boot "$DEV" || true
+            xcrun simctl bootstatus "$DEV" -b
+            xcrun simctl status_bar "$DEV" override --time "9:41" --batteryLevel 100 --batteryState charged || true
+            xcrun simctl install "$DEV" "$APP"
+          done
+
+          shoot() {
+            DEV=$1; NAME=$2; shift 2
+            xcrun simctl terminate "$DEV" com.resipdf.app || true
+            xcrun simctl launch "$DEV" com.resipdf.app -demo "$@"
+            sleep 10
+            xcrun simctl io "$DEV" screenshot "capturas/$NAME.png"
+          }
+
+          shoot "$PRO"  1-editor-ipad-pro
+          shoot "$PRO"  2-rueda-de-colores -demoRing
+          shoot "$PRO"  3-lista-anotaciones -demoList
+          shoot "$PRO"  4-preferencias -demoSettings
+          shoot "$MINI" 5-editor-ipad-mini
+          ls -la capturas
+
+      - name: Publicar capturas
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: capturas
+          name: Capturas de pantalla
+          body: "Capturas automáticas del simulador (iPad Pro 13 y iPad mini)."
+          files: capturas/*.png
+
+      - name: Mostrar errores de compilación
+        if: failure()
+        run: |
+          grep -E "error:" build.log | sed -E 's#^.*/ResiPDF/ResiPDF/##' | sort -u > errors.txt || true
+          i=0
+          while IFS= read -r line; do
+            i=$((i+1))
+            if [ $i -le 10 ]; then echo "::error::$line"
+            elif [ $i -le 20 ]; then echo "::warning::$line"
+            fi
+          done < errors.txt

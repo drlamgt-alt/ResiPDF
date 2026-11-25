@@ -21,6 +21,10 @@ final class PDFFileDocument: ReferenceFileDocument {
         pdf = doc
     }
 
+    init(pdf: PDFDocument) {
+        self.pdf = pdf
+    }
+
     required init(configuration: ReadConfiguration) throws {
         guard let data = configuration.file.regularFileContents,
               let doc = PDFDocument(data: data) else {

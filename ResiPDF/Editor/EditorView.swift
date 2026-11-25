@@ -81,9 +81,24 @@ struct EditorView: View {
         .onAppear {
             // Al abrir un PDF ya queda listo el primer marcador: Pencil marca, dedo navega.
             if editor.tool == .navigate { editor.selectFirstPreset(store: store) }
+            openDemoScreenIfRequested()
         }
         .onChange(of: store.settings.activeProfileID) { _, _ in
             editor.selectFirstPreset(store: store)
+        }
+    }
+
+    /// Solo para las capturas automáticas (modo `-demo`).
+    private func openDemoScreenIfRequested() {
+        let args = ProcessInfo.processInfo.arguments
+        guard args.contains("-demo") else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            if args.contains("-demoSettings") { showSettings = true }
+            if args.contains("-demoList") { showList = true }
+            if args.contains("-demoRing") {
+                let bounds = editor.pdfView?.bounds ?? CGRect(x: 0, y: 0, width: 800, height: 1000)
+                editor.quickPalettePoint = CGPoint(x: bounds.midX + 120, y: bounds.midY - 80)
+            }
         }
     }
 
