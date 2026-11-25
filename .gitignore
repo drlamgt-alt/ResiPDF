@@ -1,0 +1,10 @@
+# Generados por XcodeGen / Xcode
+*.xcodeproj/
+*.xcworkspace/
+Config/Info.plist
+build/
+DerivedData/
+Payload/
+*.ipa
+xcuserdata/
+.DS_Store

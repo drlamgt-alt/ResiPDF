@@ -1,0 +1,106 @@
+# Compila ResiPDF en un Mac de GitHub (gratis) y publica:
+#  - ResiPDF.ipa (sin firmar) en Releases → descarga directa desde el iPad
+#  - apps.json → "fuente" para SideStore/AltStore (actualizaciones desde el iPad)
+name: Build IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar XcodeGen
+        run: brew install xcodegen
+
+      - name: Generar proyecto Xcode
+        run: xcodegen generate
+
+      - name: Compilar (sin firma)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ResiPDF.xcodeproj \
+            -scheme ResiPDF \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            MARKETING_VERSION=1.0.${{ github.run_number }} \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build | tee build.log
+
+      - name: Empaquetar .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/ResiPDF.app Payload/
+          zip -qry ResiPDF.ipa Payload
+
+      - name: Crear fuente para SideStore / AltStore
+        run: |
+          SIZE=$(stat -f%z ResiPDF.ipa)
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          REPO="${{ github.repository }}"
+          cat > apps.json <<EOF
+          {
+            "name": "ResiPDF",
+            "identifier": "io.github.${REPO//\//.}",
+            "apps": [
+              {
+                "name": "ResiPDF",
+                "bundleIdentifier": "com.resipdf.app",
+                "developerName": "ResiPDF",
+                "subtitle": "Lector y subrayador de PDF para residentes",
+                "localizedDescription": "Subrayado rápido con Apple Pencil, perfiles de color para cirugía y tapas de autoevaluación.",
+                "iconURL": "https://raw.githubusercontent.com/${REPO}/main/ResiPDF/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+                "tintColor": "8F5CDE",
+                "versions": [
+                  {
+                    "version": "1.0.${{ github.run_number }}",
+                    "buildVersion": "${{ github.run_number }}",
+                    "date": "${DATE}",
+                    "size": ${SIZE},
+                    "downloadURL": "https://github.com/${REPO}/releases/download/latest/ResiPDF.ipa",
+                    "minOSVersion": "17.0"
+                  }
+                ],
+                "appPermissions": { "entitlements": [], "privacy": {} }
+              }
+            ],
+            "news": []
+          }
+          EOF
+
+      - name: Publicar en Releases (descarga directa desde el iPad)
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: ResiPDF (última versión)
+          body: "Compilación ${{ github.run_number }}. Abre este enlace desde Safari en el iPad o añade apps.json como fuente en SideStore."
+          files: |
+            ResiPDF.ipa
+            apps.json
+
+      - name: Subir .ipa como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: ResiPDF-ipa
+          path: ResiPDF.ipa
+
+      - name: Subir log si falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
