@@ -28,19 +28,19 @@ enum DemoNotebook {
 
         // Columna de preguntas (Cornell)
         var y = layout.header + 2 * layout.lineSpacing - 8
-        for words in [[40, 55, 30], [60, 45], [35, 50, 40], [70, 30]] {
+        for words in [[40, 55, 30], [60, 45], [35, 50, 40], [70, 30]] as [[CGFloat]] {
             strokes += scribble(x: 18, y: y, words: words, ink: red)
             y += layout.lineSpacing * 2
         }
         // Notas (debajo de la figura)
         y = layout.header + 24 + 150 + layout.lineSpacing
-        for words in [[60, 80, 45, 90], [50, 70, 110], [90, 40, 75, 60], [45, 95, 70], [80, 55, 100, 40], [70, 60]] {
+        for words in [[60, 80, 45, 90], [50, 70, 110], [90, 40, 75, 60], [45, 95, 70], [80, 55, 100, 40], [70, 60]] as [[CGFloat]] {
             strokes += scribble(x: layout.cueWidth + 20, y: y, words: words, ink: ink)
             y += layout.lineSpacing
         }
         // Resumen
         y = layout.summaryTop + layout.lineSpacing + 2
-        for words in [[70, 90, 60, 110, 80, 50], [95, 60, 85, 70]] {
+        for words in [[70, 90, 60, 110, 80, 50], [95, 60, 85, 70]] as [[CGFloat]] {
             strokes += scribble(x: 24, y: y, words: words, ink: ink)
             y += layout.lineSpacing
         }
