@@ -298,6 +298,8 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
     private func begin(at p: CGPoint, in view: PDFView) {
         if editor.quickPalettePoint != nil { editor.quickPalettePoint = nil }
         if editor.tagRequest != nil { editor.tagRequest = nil }
+        // Al marcar el PDF se oculta la paleta del cuaderno para que no tape el dock.
+        NotificationCenter.default.post(name: NotebookCanvasView.hideToolsNotification, object: nil)
         hoverDot.isHidden = true
         mode = currentMode()
         startPoint = p

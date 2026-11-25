@@ -75,6 +75,7 @@ struct NotebookView: View {
                 .labelStyle(.titleAndIcon)
             Spacer(minLength: 0)
             if isPageSection {
+                iconButton("pencil.tip.crop.circle", "Mostrar u ocultar bolígrafos") { canvas.toggleTools() }
                 iconButton("arrow.uturn.backward", "Deshacer") { canvas.undo() }
                 iconButton("arrow.uturn.forward", "Rehacer") { canvas.redo() }
                 Button { moveImages.toggle() } label: {

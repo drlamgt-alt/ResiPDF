@@ -59,6 +59,15 @@ final class NotebookCanvasView: PKCanvasView {
         imageHost.isUserInteractionEnabled = false
         insertSubview(imageHost, at: 0)
         insertSubview(paperHost, at: 0)
+        NotificationCenter.default.addObserver(self, selector: #selector(hideTools),
+                                               name: Self.hideToolsNotification, object: nil)
+    }
+
+    /// La envía el PDF al empezar a marcar: la paleta del cuaderno se oculta para no tapar el dock.
+    static let hideToolsNotification = Notification.Name("ResiPDF.ocultarPaletaCuaderno")
+
+    @objc private func hideTools() {
+        if isFirstResponder { resignFirstResponder() }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) no se usa") }
@@ -179,6 +188,11 @@ final class CanvasController: ObservableObject {
     weak var canvas: NotebookCanvasView?
     func undo() { canvas?.undoManager?.undo() }
     func redo() { canvas?.undoManager?.redo() }
+    /// Muestra u oculta la paleta de PencilKit (bolígrafos, colores, regla…).
+    func toggleTools() {
+        guard let canvas else { return }
+        if canvas.isFirstResponder { canvas.resignFirstResponder() } else { canvas.becomeFirstResponder() }
+    }
 }
 
 /// Puente SwiftUI ↔ hoja de PencilKit.
@@ -243,6 +257,11 @@ struct PageCanvas: UIViewRepresentable {
         var pageID: UUID?
         var loading = false
         weak var store: NotebookStore?
+
+        /// Al escribir en el cuaderno vuelve la paleta de PencilKit.
+        func canvasViewDidBeginUsingTool(_ canvasView: PKCanvasView) {
+            if !canvasView.isFirstResponder { canvasView.becomeFirstResponder() }
+        }
 
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             guard !loading, let id = pageID else { return }
