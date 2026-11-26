@@ -26,6 +26,24 @@ App nativa para iPad (mini, normal, Air y Pro, iPadOS 17 o superior) hecha con S
 - **Lista de anotaciones** filtrable por significado o por sello. Por ejemplo: todas las «Pregunta de examen» o todos los sellos «Q».
 - **Exportar resumen** en Markdown, listo para Anki o Notas.
 
+**Sincronizar entre tus iPads (iCloud Drive)**
+
+Con SideStore la app no puede usar el iCloud «propio» de las apps, porque eso exige la cuenta de pago. Lo que sí funciona es una carpeta normal de iCloud Drive:
+
+1. En **Archivos → iCloud Drive** crea la carpeta **ResiPDF**.
+2. Pon allí tus PDF.
+   - Las marcas se guardan dentro de cada PDF, así que se sincronizan con él.
+3. En ResiPDF ve a **Preferencias → Sincronización → Elegir carpeta en iCloud Drive…**, elige esa carpeta y repítelo en cada iPad.
+4. A partir de ahí se comparten solos:
+   - los cuadernos, con sus hojas, figuras y anexos;
+   - tus colores y patrones;
+   - tus etiquetas y sellos.
+
+   La posición del dock y los ajustes del Pencil son propios de cada iPad.
+5. Los cambios de otro iPad llegan al volver a la app y cada 15 segundos.
+   - Si escribes en el mismo cuaderno en dos iPads a la vez, gana lo último que guardaste.
+6. En **⋯ → Mis cuadernos** ves todos tus cuadernos. Desde ahí puedes exportarlos a PDF o borrarlos.
+
 ---
 
 ## Instalar SIN App Store y SIN conectar el iPad a una computadora

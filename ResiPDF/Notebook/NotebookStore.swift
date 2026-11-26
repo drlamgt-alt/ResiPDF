@@ -1,33 +1,46 @@
 import SwiftUI
+import Combine
 
-/// Guarda el cuaderno de un libro en «En mi iPad › ResiPDF › Cuadernos › <libro>».
+/// Guarda el cuaderno de un libro en «<carpeta de sincronización> › Cuadernos › <libro>»
+/// (o «En mi iPad › ResiPDF › Cuadernos › <libro>» si no hay carpeta elegida).
 /// - `cuaderno.json`: hojas, trazos e imágenes colocadas.
 /// - `figuras/`: figuras recortadas del PDF (PNG).
+///
+/// Si otro iPad cambia el cuaderno, se recarga solo (al volver a la app y cada 15 s).
 final class NotebookStore: ObservableObject {
     let bookName: String
-    let folder: URL
 
     /// Cambia cuando cambia la estructura (hojas, imágenes, figuras).
     /// Los trazos del Pencil NO lo cambian, para no redibujar la vista en cada trazo.
     @Published private(set) var revision = 0
+    /// true mientras se descarga el cuaderno de iCloud.
+    @Published private(set) var isLoading = false
     private(set) var notebook: Notebook?
+    /// Sube cada vez que el cuaderno se lee del disco (p. ej. cambios de otro iPad):
+    /// la hoja abierta vuelve a cargar sus trazos.
+    private(set) var loadCount = 0
     /// Última hoja abierta (para insertar figuras en ella).
     var currentPageID: UUID?
     /// Sección que debe abrirse la próxima vez que se muestre el cuaderno.
     var requestedSection: NotebookSection?
 
     private var saveWork: DispatchWorkItem?
+    private var hasUnsavedChanges = false
+    /// Fecha del archivo la última vez que lo leímos o escribimos nosotros.
+    private var knownFileDate: Date?
     private let imageCache = NSCache<NSString, UIImage>()
-
-    static var rootFolder: URL {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return docs.appendingPathComponent("Cuadernos", isDirectory: true)
-    }
+    private var pendingImages: Set<String> = []
+    private var bag: Set<AnyCancellable> = []
+    private let io = DispatchQueue(label: "ResiPDF.cuaderno.io", qos: .userInitiated)
 
     init(bookName: String) {
         self.bookName = bookName
-        folder = Self.rootFolder.appendingPathComponent(Self.safeName(bookName), isDirectory: true)
         load()
+        let sync = SyncFolder.shared
+        sync.willChangeRoot.sink { [weak self] in self?.saveNow() }.store(in: &bag)
+        sync.$pulse.dropFirst().receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.checkForExternalChanges() }
+            .store(in: &bag)
     }
 
     static func safeName(_ s: String) -> String {
@@ -37,6 +50,10 @@ final class NotebookStore: ObservableObject {
         return cleaned.isEmpty ? "Sin título" : String(cleaned.prefix(120))
     }
 
+    /// Se calcula cada vez: si eliges otra carpeta de sincronización, el cuaderno la sigue.
+    var folder: URL {
+        SyncFolder.shared.notebooksRoot.appendingPathComponent(Self.safeName(bookName), isDirectory: true)
+    }
     private var fileURL: URL { folder.appendingPathComponent("cuaderno.json") }
     private var figuresFolder: URL { folder.appendingPathComponent("figuras", isDirectory: true) }
 
@@ -53,16 +70,66 @@ final class NotebookStore: ObservableObject {
         set { UserDefaults.standard.set(newValue, forKey: declineKey) }
     }
 
-    // MARK: - Carga y guardado
+    // MARK: - Carga
 
+    /// Lee el cuaderno. Si ya está en el iPad, al instante; si iCloud aún lo está bajando, en segundo plano.
     func load() {
-        guard let data = try? Data(contentsOf: fileURL),
-              let nb = try? JSONDecoder().decode(Notebook.self, from: data) else {
-            notebook = nil
+        let url = fileURL
+        if CoordinatedFile.isLocal(url) {
+            apply(CoordinatedFile.read(url), date: CoordinatedFile.modificationDate(url), from: url)
+            return
+        }
+        isLoading = true
+        try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+        io.async { [weak self] in
+            let data = CoordinatedFile.read(url)
+            let date = CoordinatedFile.modificationDate(url)
+            DispatchQueue.main.async {
+                self?.isLoading = false
+                self?.apply(data, date: date, from: url)
+            }
+        }
+    }
+
+    private func apply(_ data: Data?, date: Date?, from url: URL) {
+        guard url == fileURL else { return }   // cambió la carpeta mientras se leía
+        guard let data, let nb = try? JSONDecoder().decode(Notebook.self, from: data) else {
+            if notebook != nil {
+                // La carpeta cambió y aquí no hay cuaderno: se guarda el actual en la nueva.
+                saveNow()
+            }
+            return
+        }
+        // Nunca se reemplaza un cuaderno por una versión más antigua.
+        if let current = notebook, current.modified > nb.modified {
+            saveNow()
             return
         }
         notebook = nb
+        knownFileDate = date
+        hasUnsavedChanges = false
+        imageCache.removeAllObjects()
+        if let id = currentPageID, !nb.pages.contains(where: { $0.id == id }) { currentPageID = nil }
+        loadCount += 1
         revision += 1
+    }
+
+    /// Si otro dispositivo guardó una versión nueva, la carga.
+    func checkForExternalChanges() {
+        let url = fileURL
+        guard !isLoading else { return }
+        let date = CoordinatedFile.modificationDate(url)
+        if notebook == nil {
+            if date != nil { load() }   // el cuaderno se creó en otro iPad
+            return
+        }
+        guard let date else {
+            saveNow()                   // carpeta nueva y vacía: se guarda aquí
+            return
+        }
+        if let known = knownFileDate, date.timeIntervalSince(known) < 0.5 { return }
+        if hasUnsavedChanges { saveNow() }   // gana lo último que escribiste en este iPad
+        else { load() }
     }
 
     func create() {
@@ -76,14 +143,18 @@ final class NotebookStore: ObservableObject {
     func resetForDemo() {
         try? FileManager.default.removeItem(at: folder)
         notebook = nil
+        knownFileDate = nil
         revision += 1
     }
+
+    // MARK: - Guardado
 
     private func mutate(structural: Bool = true, _ change: (inout Notebook) -> Void) {
         guard var nb = notebook else { return }
         change(&nb)
         nb.modified = Date()
         notebook = nb
+        hasUnsavedChanges = true
         if structural { revision += 1 }
         scheduleSave()
     }
@@ -99,9 +170,10 @@ final class NotebookStore: ObservableObject {
         saveWork?.cancel()
         guard let nb = notebook else { return }
         do {
-            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(nb)
-            try data.write(to: fileURL, options: .atomic)
+            try CoordinatedFile.write(data, to: fileURL)
+            knownFileDate = CoordinatedFile.modificationDate(fileURL)
+            hasUnsavedChanges = false
         } catch {
             print("No se pudo guardar el cuaderno: \(error)")
         }
@@ -199,8 +271,7 @@ final class NotebookStore: ObservableObject {
         guard let data = image.pngData() else { return nil }
         let file = UUID().uuidString + ".png"
         do {
-            try FileManager.default.createDirectory(at: figuresFolder, withIntermediateDirectories: true)
-            try data.write(to: figuresFolder.appendingPathComponent(file), options: .atomic)
+            try CoordinatedFile.write(data, to: figuresFolder.appendingPathComponent(file))
         } catch {
             print("No se pudo guardar la figura: \(error)")
             return nil
@@ -216,10 +287,30 @@ final class NotebookStore: ObservableObject {
         mutate { nb in nb.figures.removeAll { $0.id == id } }
     }
 
+    /// Devuelve la figura si ya está en el iPad. Si iCloud aún la está bajando, devuelve nil
+    /// y redibuja el cuaderno cuando llegue.
     func image(named file: String) -> UIImage? {
         if let cached = imageCache.object(forKey: file as NSString) { return cached }
-        guard let img = UIImage(contentsOfFile: figuresFolder.appendingPathComponent(file).path) else { return nil }
-        imageCache.setObject(img, forKey: file as NSString)
-        return img
+        let url = figuresFolder.appendingPathComponent(file)
+        if CoordinatedFile.isLocal(url) {
+            guard let data = CoordinatedFile.read(url), let img = UIImage(data: data) else { return nil }
+            imageCache.setObject(img, forKey: file as NSString)
+            return img
+        }
+        guard !pendingImages.contains(file) else { return nil }
+        pendingImages.insert(file)
+        try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+        io.async { [weak self] in
+            let img = CoordinatedFile.read(url).flatMap(UIImage.init(data:))
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.pendingImages.remove(file)
+                if let img {
+                    self.imageCache.setObject(img, forKey: file as NSString)
+                    self.revision += 1
+                }
+            }
+        }
+        return nil
     }
 }

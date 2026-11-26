@@ -50,6 +50,33 @@ enum DemoNotebook {
         store.saveNow()
     }
 
+    /// Otros cuadernos de ejemplo para la pantalla «Mis cuadernos».
+    static func populateLibrary() {
+        let ink = PKInk(.pen, color: UIColor(red: 0.10, green: 0.18, blue: 0.45, alpha: 1))
+        let examples: [(String, PaperStyle, Int)] = [
+            ("Hernias de la pared abdominal", .lined, 4),
+            ("ATLS — Trauma abdominal", .grid, 7),
+            ("Colecistitis y colangitis", .dotted, 2),
+        ]
+        for (title, paper, extraPages) in examples {
+            let store = NotebookStore(bookName: title)
+            store.resetForDemo()
+            store.create()
+            guard let pageID = store.pages.first?.id else { continue }
+            store.setPaper(pageID, paper)
+            store.renamePage(pageID, to: "Resumen")
+            var strokes: [PKStroke] = []
+            var y: CGFloat = 150
+            for words in [[80, 60, 110, 50], [70, 95, 60], [100, 45, 80, 65], [60, 120], [85, 70, 90]] as [[CGFloat]] {
+                strokes += scribble(x: 60, y: y, words: words, ink: ink)
+                y += 68
+            }
+            store.updateDrawing(pageID, PKDrawing(strokes: strokes).dataRepresentation())
+            for _ in 0..<extraPages { store.addPage(paper) }
+            store.saveNow()
+        }
+    }
+
     /// Simula palabras manuscritas con ondas cortas sobre un renglón.
     private static func scribble(x: CGFloat, y: CGFloat, words: [CGFloat], ink: PKInk) -> [PKStroke] {
         var strokes: [PKStroke] = []

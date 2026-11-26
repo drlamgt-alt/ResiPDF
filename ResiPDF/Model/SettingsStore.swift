@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// Acción asignable al doble toque / apretón del Apple Pencil.
 enum PencilAction: String, Codable, CaseIterable, Identifiable {
@@ -150,12 +151,65 @@ struct AppSettings: Codable, Equatable {
     }
 }
 
-/// Preferencias globales (se guardan en el iPad, valen para todos los PDF).
+/// Lo que se comparte entre tus dispositivos: tu sistema de colores y etiquetas.
+/// La posición del dock, el tamaño de botones o el Pencil se quedan en cada iPad
+/// (un iPad mini y un iPad Pro no se usan igual).
+struct SyncedSettings: Codable, Equatable {
+    var profiles: [PresetProfile]
+    var activeProfileID: UUID?
+    var tags: [String]
+    var stamps: [String]
+    var currentStamp: String
+
+    init(_ s: AppSettings) {
+        profiles = s.profiles
+        activeProfileID = s.activeProfileID
+        tags = s.tags
+        stamps = s.stamps
+        currentStamp = s.currentStamp
+    }
+
+    func apply(to s: inout AppSettings) {
+        if !profiles.isEmpty { s.profiles = profiles }
+        s.activeProfileID = profiles.contains { $0.id == activeProfileID } ? activeProfileID : s.profiles.first?.id
+        s.tags = tags
+        if !stamps.isEmpty { s.stamps = stamps }
+        s.currentStamp = s.stamps.contains(currentStamp) ? currentStamp : s.stamps[0]
+    }
+}
+
+/// Archivo `ajustes.json` de la carpeta de sincronización.
+private struct SettingsFile: Codable {
+    var modified: Date
+    var settings: SyncedSettings
+}
+
+/// Preferencias globales (valen para todos los PDF). Se guardan en el iPad y, si hay carpeta
+/// de sincronización, los colores, patrones y etiquetas también allí.
 final class SettingsStore: ObservableObject {
     private static let key = "ResiPDF.settings.v3"
+    private static let modifiedKey = "ResiPDF.settings.modificado"
 
     @Published var settings: AppSettings {
-        didSet { save() }
+        didSet {
+            save()
+            if !applyingRemote, SyncedSettings(oldValue) != SyncedSettings(settings) {
+                localModified = Date()
+                schedulePush()
+            }
+        }
+    }
+
+    private var applyingRemote = false
+    private var pushWork: DispatchWorkItem?
+    private var knownRemoteDate: Date?
+    private var bag: Set<AnyCancellable> = []
+    private let io = DispatchQueue(label: "ResiPDF.ajustes.io", qos: .utility)
+
+    /// Cuándo cambiaste por última vez los colores en este iPad.
+    private var localModified: Date {
+        get { UserDefaults.standard.object(forKey: Self.modifiedKey) as? Date ?? .distantPast }
+        set { UserDefaults.standard.set(newValue, forKey: Self.modifiedKey) }
     }
 
     init() {
@@ -165,6 +219,10 @@ final class SettingsStore: ObservableObject {
         } else {
             settings = AppSettings()
         }
+        guard !ProcessInfo.processInfo.arguments.contains("-demo") else { return }
+        SyncFolder.shared.$pulse.receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.syncWithFolder() }
+            .store(in: &bag)
     }
 
     private func save() {
@@ -172,6 +230,76 @@ final class SettingsStore: ObservableObject {
             UserDefaults.standard.set(data, forKey: Self.key)
         }
     }
+
+    // MARK: - Sincronización
+
+    /// Compara con `ajustes.json`: gana la versión más reciente.
+    /// Al conectar una carpeta que ya tiene ajustes (de otro iPad), ganan los de la carpeta.
+    func syncWithFolder() {
+        let sync = SyncFolder.shared
+        guard let url = sync.settingsURL else { return }
+        let preferRemote = sync.consumeJustConnected()
+        guard let date = CoordinatedFile.modificationDate(url) else {
+            pushNow()   // la carpeta aún no tiene ajustes: sube los de este iPad
+            return
+        }
+        if !preferRemote, let known = knownRemoteDate, abs(date.timeIntervalSince(known)) < 0.5 { return }
+        io.async { [weak self] in
+            let file = CoordinatedFile.read(url).flatMap { try? Self.decoder.decode(SettingsFile.self, from: $0) }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.knownRemoteDate = date
+                guard let file else { return }
+                let local = SyncedSettings(self.settings)
+                if file.settings == local { return }
+                if preferRemote || file.modified > self.localModified {
+                    self.applyingRemote = true
+                    var s = self.settings
+                    file.settings.apply(to: &s)
+                    self.settings = s
+                    self.applyingRemote = false
+                    self.localModified = file.modified
+                } else {
+                    self.pushNow()
+                }
+            }
+        }
+    }
+
+    private func schedulePush() {
+        guard SyncFolder.shared.settingsURL != nil else { return }
+        pushWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.pushNow() }
+        pushWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
+    }
+
+    private func pushNow() {
+        pushWork?.cancel()
+        guard let url = SyncFolder.shared.settingsURL else { return }
+        let file = SettingsFile(modified: localModified == .distantPast ? Date() : localModified,
+                                settings: SyncedSettings(settings))
+        guard let data = try? Self.encoder.encode(file) else { return }
+        do {
+            try CoordinatedFile.write(data, to: url)
+            knownRemoteDate = CoordinatedFile.modificationDate(url)
+        } catch {
+            print("No se pudieron guardar los ajustes en la carpeta: \(error)")
+        }
+    }
+
+    private static let encoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.outputFormatting = [.prettyPrinted, .sortedKeys]
+        e.dateEncodingStrategy = .iso8601
+        return e
+    }()
+
+    private static let decoder: JSONDecoder = {
+        let d = JSONDecoder()
+        d.dateDecodingStrategy = .iso8601
+        return d
+    }()
 
     func preset(id: UUID) -> MarkPreset? {
         settings.presets.first { $0.id == id }

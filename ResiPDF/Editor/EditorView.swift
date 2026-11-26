@@ -8,6 +8,7 @@ struct EditorView: View {
     @StateObject private var editor = EditorState()
 
     @State private var showSettings = false
+    @State private var showLibrary = false
     @State private var showSearch = false
     @State private var showSidebar = false
     @State private var sidebarTab: SidebarTab = .outline
@@ -67,6 +68,16 @@ struct EditorView: View {
         .toolbar { toolbarContent }
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(store)
+        }
+        .sheet(isPresented: $showLibrary) {
+            NavigationStack {
+                NotebookLibraryView()
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Listo") { showLibrary = false }
+                        }
+                    }
+            }
         }
         .sheet(isPresented: $showSearch) {
             SearchView(pdf: document.pdf,
@@ -137,6 +148,8 @@ struct EditorView: View {
         guard !ProcessInfo.processInfo.arguments.contains("-demo"),
               !notebook.exists, !notebook.promptDeclined else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            // Si el cuaderno llegó de iCloud mientras tanto, no se pregunta.
+            guard !notebook.exists, !notebook.isLoading else { return }
             promptIsAutomatic = true
             showNotebookPrompt = true
         }
@@ -272,6 +285,9 @@ struct EditorView: View {
                 } label: {
                     Label("Ver y exportar marcas", systemImage: "list.bullet.rectangle")
                 }
+                Button { showLibrary = true } label: {
+                    Label("Mis cuadernos", systemImage: "books.vertical")
+                }
                 Divider()
                 Button { showSettings = true } label: {
                     Label("Preferencias", systemImage: "gearshape")
@@ -305,6 +321,11 @@ struct EditorView: View {
         guard args.contains("-demo") else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             if args.contains("-demoSettings") { showSettings = true }
+            if args.contains("-demoLibrary") {
+                DemoNotebook.populate(notebook, pdf: document.pdf)
+                DemoNotebook.populateLibrary()
+                showLibrary = true
+            }
             if args.contains("-demoMarks") { sidebarTab = .marks; showSidebar = true }
             if args.contains("-demoSidebar") { sidebarTab = .outline; showSidebar = true }
             if args.contains("-demoRing") {

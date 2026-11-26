@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @EnvironmentObject private var store: SettingsStore
@@ -6,6 +7,9 @@ struct SettingsView: View {
     @State private var confirmDelete = false
     @State private var newTag = ""
     @State private var showNewTag = false
+    @ObservedObject private var sync = SyncFolder.shared
+    @State private var pickFolder = false
+    @State private var confirmDisconnect = false
 
     private var stampsText: Binding<String> {
         Binding(
@@ -23,6 +27,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                syncSection
                 patternSection
                 presetsSection
                 tagsSection
@@ -44,6 +49,14 @@ struct SettingsView: View {
                     store.settings.activeProfileID = store.settings.profiles.first?.id
                 }
             }
+            .fileImporter(isPresented: $pickFolder, allowedContentTypes: [.folder]) { result in
+                if case .success(let url) = result { sync.connect(url) }
+            }
+            .confirmationDialog("¿Dejar de sincronizar?", isPresented: $confirmDisconnect, titleVisibility: .visible) {
+                Button("Dejar de sincronizar", role: .destructive) { sync.disconnect() }
+            } message: {
+                Text("Se guarda una copia de los cuadernos en este iPad y los cambios dejan de compartirse. La carpeta de iCloud Drive no se borra.")
+            }
             .alert("Nueva etiqueta", isPresented: $showNewTag) {
                 TextField("Ej. Pediatría", text: $newTag)
                 Button("Añadir") {
@@ -53,6 +66,54 @@ struct SettingsView: View {
                 }
                 Button("Cancelar", role: .cancel) { newTag = "" }
             }
+        }
+    }
+
+    // MARK: - Sincronización
+
+    private var syncSection: some View {
+        Section {
+            SyncStatusBanner()
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+
+            Button {
+                pickFolder = true
+            } label: {
+                Label(sync.isConnected ? "Cambiar carpeta…" : "Elegir carpeta en iCloud Drive…",
+                      systemImage: "folder.badge.plus")
+            }
+            if sync.isConnected {
+                Button {
+                    sync.checkNow()
+                } label: {
+                    HStack {
+                        Label("Sincronizar ahora", systemImage: "arrow.triangle.2.circlepath")
+                        Spacer()
+                        if let last = sync.lastCheck {
+                            Text(last, format: .relative(presentation: .named))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Button(role: .destructive) { confirmDisconnect = true } label: {
+                    Label("Dejar de sincronizar", systemImage: "icloud.slash")
+                }
+            }
+            if let error = sync.lastError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+            NavigationLink {
+                NotebookLibraryView()
+            } label: {
+                Label("Mis cuadernos", systemImage: "books.vertical")
+            }
+        } header: {
+            Text("Sincronización")
+        } footer: {
+            Text("Crea en Archivos una carpeta «iCloud Drive › ResiPDF» y elígela aquí en cada iPad. Se comparten los cuadernos, los colores, los patrones y las etiquetas. Guarda los PDF en esa misma carpeta: las marcas van dentro del PDF y también se sincronizan.")
         }
     }
 

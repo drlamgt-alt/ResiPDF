@@ -113,6 +113,8 @@ final class NotebookCanvasView: PKCanvasView {
         }
         for item in list {
             let v = imageViews[item.id] ?? makeImageView(item, loader: loader)
+            // La figura puede llegar más tarde desde iCloud.
+            if v.image == nil { v.image = loader(item.file) }
             v.transform = .identity
             v.frame = item.frame
         }
@@ -230,13 +232,16 @@ struct PageCanvas: UIViewRepresentable {
         c.picker.setVisible(!moveMode, forFirstResponder: canvas)
 
         guard let page = store.page(pageID) else { return }
-        if c.pageID != pageID {
+        // Recarga los trazos al cambiar de hoja o si llegó una versión nueva de otro iPad.
+        if c.pageID != pageID || c.loadCount != store.loadCount {
+            let newPage = c.pageID != pageID
             c.pageID = pageID
+            c.loadCount = store.loadCount
             c.loading = true
             canvas.drawing = (try? PKDrawing(data: page.drawing)) ?? PKDrawing()
             c.loading = false
             canvas.undoManager?.removeAllActions()
-            canvas.setContentOffset(.zero, animated: false)
+            if newPage { canvas.setContentOffset(.zero, animated: false) }
         }
         canvas.paperView.paper = page.paper
         canvas.paperView.title = page.title
@@ -255,6 +260,7 @@ struct PageCanvas: UIViewRepresentable {
     final class Coordinator: NSObject, PKCanvasViewDelegate {
         let picker = PKToolPicker()
         var pageID: UUID?
+        var loadCount = -1
         var loading = false
         weak var store: NotebookStore?
 

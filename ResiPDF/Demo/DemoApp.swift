@@ -6,6 +6,11 @@ struct DemoApp: App {
     @StateObject private var store = SettingsStore()
     @StateObject private var document = DemoContent.makeDocument()
 
+    init() {
+        // En las capturas se muestra como si ya estuviera sincronizando con iCloud Drive.
+        SyncFolder.shared.demoLabel = "iCloud Drive › ResiPDF"
+    }
+
     var body: some Scene {
         WindowGroup {
             NavigationStack {

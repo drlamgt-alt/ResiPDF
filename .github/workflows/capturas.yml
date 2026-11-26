@@ -76,6 +76,7 @@ jobs:
           shoot "$PRO"  6-rueda-de-colores -demoRing
           shoot "$PRO"  8-cuaderno -demoNotebook
           shoot "$PRO"  9-anexo-preguntas -demoAnnex
+          shoot "$PRO"  10-mis-cuadernos -demoLibrary
           shoot "$MINI" 7-editor-ipad-mini
           ls -la capturas
 
