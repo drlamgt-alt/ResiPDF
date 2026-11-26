@@ -158,7 +158,11 @@ struct NotebookLibraryView: View {
         if checkSync { sync.checkNow() }
         loading = true
         let root = sync.notebooksRoot
-        let found = await Task.detached(priority: .userInitiated) { NotebookLibrary.scan(root) }.value
+        let found: [NotebookSummary] = await withCheckedContinuation { cont in
+            DispatchQueue.global(qos: .userInitiated).async {
+                cont.resume(returning: NotebookLibrary.scan(root))
+            }
+        }
         items = found
         loading = false
     }

@@ -143,6 +143,8 @@ final class SyncFolder: ObservableObject {
 /// no está en el iPad y no lo pisa mientras lo está sincronizando.
 enum CoordinatedFile {
     static func read(_ url: URL) -> Data? {
+        // Archivos que ya están en el iPad: lectura directa, sin esperar al coordinador.
+        if isLocal(url) { return try? Data(contentsOf: url) }
         var result: Data?
         var error: NSError?
         NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &error) { u in
