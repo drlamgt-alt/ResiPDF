@@ -219,6 +219,60 @@ final class NotebookStore: ObservableObject {
         }
     }
 
+    func setTint(_ id: UUID, _ tint: PaperTint) {
+        mutate { nb in
+            if let i = nb.pages.firstIndex(where: { $0.id == id }) { nb.pages[i].tint = tint }
+        }
+    }
+
+    @discardableResult
+    func duplicatePage(_ id: UUID) -> UUID? {
+        var newID: UUID?
+        mutate { nb in
+            guard let i = nb.pages.firstIndex(where: { $0.id == id }) else { return }
+            var copy = nb.pages[i]
+            copy.id = UUID()
+            copy.title += " (copia)"
+            copy.images = copy.images.map { var img = $0; img.id = UUID(); return img }
+            copy.created = Date()
+            nb.pages.insert(copy, at: i + 1)
+            newID = copy.id
+        }
+        return newID
+    }
+
+    /// Mueve una hoja una posición antes (-1) o después (+1).
+    func movePage(_ id: UUID, by offset: Int) {
+        mutate { nb in
+            guard let i = nb.pages.firstIndex(where: { $0.id == id }) else { return }
+            let j = i + offset
+            guard nb.pages.indices.contains(j) else { return }
+            nb.pages.swapAt(i, j)
+        }
+    }
+
+    func setCover(_ hex: String) {
+        mutate { $0.coverHex = hex }
+    }
+
+    // MARK: - Guía de estudio
+
+    var marks: [StudyMark] { notebook?.marks ?? [] }
+    var studyMarks: [StudyMark] { notebook?.studyMarks ?? [] }
+    var reviewed: Set<String> { notebook?.reviewed ?? [] }
+
+    /// Guarda una copia de las marcas del libro (solo si cambiaron).
+    func updateMarks(_ marks: [StudyMark]) {
+        guard let nb = notebook, nb.marks != marks else { return }
+        mutate { $0.marks = marks }
+    }
+
+    func toggleReviewed(_ id: String) {
+        mutate { nb in
+            if nb.reviewed.contains(id) { nb.reviewed.remove(id) } else { nb.reviewed.insert(id) }
+        }
+    }
+
     func updateDrawing(_ id: UUID, _ data: Data) {
         mutate(structural: false) { nb in
             if let i = nb.pages.firstIndex(where: { $0.id == id }) { nb.pages[i].drawing = data }

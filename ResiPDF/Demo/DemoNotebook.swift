@@ -4,7 +4,7 @@ import PencilKit
 
 /// Cuaderno de ejemplo para las capturas: hoja Cornell con «escritura» del Pencil y una figura recortada.
 enum DemoNotebook {
-    static func populate(_ store: NotebookStore, pdf: PDFDocument) {
+    static func populate(_ store: NotebookStore, pdf: PDFDocument, settings: SettingsStore) {
         store.resetForDemo()
         store.create()
         guard let pageID = store.pages.first?.id else { return }
@@ -45,7 +45,14 @@ enum DemoNotebook {
             y += layout.lineSpacing
         }
         store.updateDrawing(pageID, PKDrawing(strokes: strokes).dataRepresentation())
-        store.addPage(.grid, after: pageID)
+        store.addPage(.clinicalCase, after: pageID)
+        if let qa = store.addPage(.qa) { store.renamePage(qa, to: "Autoevaluación") }
+        store.addPage(.grid)
+
+        // Guía de estudio: copia de las marcas del capítulo, con dos ya repasadas.
+        let items = AnnotationBrowser.collect(pdf: pdf, store: settings)
+        store.updateMarks(StudyGuide.build(items: items, pdf: pdf))
+        for mark in store.studyMarks.prefix(2) { store.toggleReviewed(mark.id) }
         store.currentPageID = pageID
         store.saveNow()
     }
@@ -73,6 +80,15 @@ enum DemoNotebook {
             }
             store.updateDrawing(pageID, PKDrawing(strokes: strokes).dataRepresentation())
             for _ in 0..<extraPages { store.addPage(paper) }
+            // Marcas de ejemplo para que la portada muestre preguntas y progreso.
+            let marks = (0..<(extraPages * 3 + 4)).map { i in
+                StudyMark(id: "demo-\(i)", pageIndex: i * 3,
+                          action: i % 3 == 0 ? .memorize : .question,
+                          group: "Demo", kind: "Resaltado", text: "Marca \(i + 1)",
+                          hex: "#9B7BEA", tags: [], topic: "Tema \(i / 4 + 1)")
+            }
+            store.updateMarks(marks)
+            for mark in marks.prefix(marks.count / 2 + extraPages) { store.toggleReviewed(mark.id) }
             store.saveNow()
         }
     }

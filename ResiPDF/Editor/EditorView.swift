@@ -69,7 +69,7 @@ struct EditorView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(store)
         }
-        .sheet(isPresented: $showLibrary) {
+        .fullScreenCover(isPresented: $showLibrary) {
             NavigationStack {
                 NotebookLibraryView()
                     .toolbar {
@@ -78,6 +78,7 @@ struct EditorView: View {
                         }
                     }
             }
+            .environmentObject(store)
         }
         .sheet(isPresented: $showSearch) {
             SearchView(pdf: document.pdf,
@@ -197,7 +198,7 @@ struct EditorView: View {
                         withAnimation { editor.tagRequest = nil }
                     }
                     .position(x: min(max(request.point.x, 170), max(geo.size.width - 170, 170)),
-                              y: max(request.point.y - 46, 28))
+                              y: request.point.y > 140 ? request.point.y - 72 : request.point.y + 72)
                 }
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
                 .id(request.id)
@@ -262,6 +263,10 @@ struct EditorView: View {
             }
             .keyboardShortcut("n", modifiers: [.command, .shift])
 
+            Button { notebook.saveNow(); showLibrary = true } label: {
+                Label("Cuadernos", systemImage: "books.vertical")
+            }
+
             Button { editor.toggleFavorite?() } label: {
                 Label("Página favorita", systemImage: editor.currentPageIsFavorite ? "star.fill" : "star")
             }
@@ -322,7 +327,7 @@ struct EditorView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             if args.contains("-demoSettings") { showSettings = true }
             if args.contains("-demoLibrary") {
-                DemoNotebook.populate(notebook, pdf: document.pdf)
+                DemoNotebook.populate(notebook, pdf: document.pdf, settings: store)
                 DemoNotebook.populateLibrary()
                 showLibrary = true
             }
@@ -330,17 +335,28 @@ struct EditorView: View {
             if args.contains("-demoSidebar") { sidebarTab = .outline; showSidebar = true }
             if args.contains("-demoRing") {
                 let bounds = editor.pdfView?.bounds ?? CGRect(x: 0, y: 0, width: 800, height: 1000)
-                editor.quickPalettePoint = CGPoint(x: bounds.midX + 120, y: bounds.midY - 80)
+                let point = CGPoint(x: bounds.midX + 120, y: bounds.midY - 80)
+                editor.quickPalettePoint = point
+                // Como si el dedo se deslizara hacia el segundo color.
+                let n = store.settings.presets.count
+                let c = QuickRing.clampedCenter(point, in: bounds.size, count: n)
+                editor.ringPointer = QuickRing.position(index: min(1, max(n - 1, 0)), count: n, around: c)
             }
-            if args.contains("-demoNotebook") || args.contains("-demoAnnex") {
-                DemoNotebook.populate(notebook, pdf: document.pdf)
+            if args.contains("-demoNotebook") || args.contains("-demoAnnex") || args.contains("-demoGuide") || args.contains("-demoPages") {
+                DemoNotebook.populate(notebook, pdf: document.pdf, settings: store)
                 if args.contains("-demoAnnex") { notebook.requestedSection = .annex(.questions) }
+                if args.contains("-demoGuide") { notebook.requestedSection = .guide; notebookFull = true }
+                if args.contains("-demoPages") { notebook.requestedSection = .overview; notebookFull = true }
                 showNotebook = true
             }
             if args.contains("-demoTags") {
                 let bounds = editor.pdfView?.bounds ?? CGRect(x: 0, y: 0, width: 800, height: 1000)
-                editor.tagRequest = TagRequest(groupID: "demo", point: CGPoint(x: bounds.midX, y: bounds.height * 0.42),
-                                               tags: ["Dx"]) { _ in }
+                var request = TagRequest(groupID: "demo", point: CGPoint(x: bounds.midX, y: bounds.height * 0.42),
+                                         tags: ["Dx"]) { _ in }
+                request.presetID = store.settings.presets.first?.id
+                request.recolor = { _ in }
+                request.delete = {}
+                editor.tagRequest = request
             }
         }
     }

@@ -77,6 +77,8 @@ jobs:
           shoot "$PRO"  8-cuaderno -demoNotebook
           shoot "$PRO"  9-anexo-preguntas -demoAnnex
           shoot "$PRO"  10-mis-cuadernos -demoLibrary
+          shoot "$PRO"  11-guia-de-estudio -demoGuide
+          shoot "$PRO"  12-hojas -demoPages
           shoot "$MINI" 7-editor-ipad-mini
           ls -la capturas
 

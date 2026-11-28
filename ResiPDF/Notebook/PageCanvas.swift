@@ -245,6 +245,7 @@ struct PageCanvas: UIViewRepresentable {
         }
         canvas.paperView.paper = page.paper
         canvas.paperView.title = page.title
+        canvas.paperView.tint = page.tint
         canvas.setImages(page.images) { store.image(named: $0) }
     }
 

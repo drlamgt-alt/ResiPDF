@@ -19,13 +19,14 @@ enum PencilAction: String, Codable, CaseIterable, Identifiable {
 }
 
 enum ButtonSize: String, Codable, CaseIterable, Identifiable {
-    case compact, normal, large
+    case compact, normal, large, thumb
     var id: String { rawValue }
     var points: CGFloat {
         switch self {
         case .compact: return 30
         case .normal: return 36
         case .large: return 44
+        case .thumb: return 52
         }
     }
     var label: String {
@@ -33,6 +34,7 @@ enum ButtonSize: String, Codable, CaseIterable, Identifiable {
         case .compact: return "Compacto"
         case .normal: return "Normal"
         case .large: return "Grande"
+        case .thumb: return "Pulgar"
         }
     }
 }
@@ -83,6 +85,10 @@ struct AppSettings: Codable, Equatable {
     var tags: [String] = ["Dx", "Tx", "Cx", "Qx", "Anatomía", "Clasificación", "Fisiopato", "Epidemio"]
     var autoTagBar: Bool = true
     var readingMode: ReadingMode = .continuous
+    /// Mantener el dedo quieto sobre la página abre la rueda de colores bajo el dedo.
+    var fingerRing: Bool = true
+    /// La barra que aparece tras marcar muestra los colores para cambiarlo con un toque.
+    var quickRecolor: Bool = true
 
     init() {}
 
@@ -118,7 +124,7 @@ struct AppSettings: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case profiles, activeProfileID, dockEdge, dockOffset, buttonSize, highlightOpacity, penWidth,
              fingerDrawing, doubleTap, squeeze, pencilHover, springLoaded, autoReturn, twoFingerUndo,
-             stamps, currentStamp, tags, autoTagBar, readingMode
+             stamps, currentStamp, tags, autoTagBar, readingMode, fingerRing, quickRecolor
     }
 
     init(from decoder: Decoder) throws {
@@ -147,6 +153,8 @@ struct AppSettings: Codable, Equatable {
         tags = value(.tags, d.tags)
         autoTagBar = value(.autoTagBar, d.autoTagBar)
         readingMode = value(.readingMode, d.readingMode)
+        fingerRing = value(.fingerRing, d.fingerRing)
+        quickRecolor = value(.quickRecolor, d.quickRecolor)
         if profiles.isEmpty { profiles = d.profiles }
     }
 }

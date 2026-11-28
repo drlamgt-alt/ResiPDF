@@ -19,9 +19,22 @@ enum PaperRenderer {
     private static let accent = UIColor(red: 0.86, green: 0.38, blue: 0.42, alpha: 0.85)
     private static let labelColor = UIColor(white: 0.55, alpha: 1)
 
-    static func draw(_ paper: PaperStyle, title: String, in rect: CGRect, context cg: CGContext) {
+    /// Secciones de la plantilla «Caso clínico» (título y número de renglones).
+    static let clinicalSections: [(String, Int)] = [
+        ("PACIENTE Y MOTIVO DE CONSULTA", 2),
+        ("HISTORIA CLÍNICA", 4),
+        ("EXPLORACIÓN FÍSICA", 3),
+        ("ESTUDIOS · LABORATORIO E IMAGEN", 3),
+        ("DIAGNÓSTICO Y DIFERENCIALES", 3),
+        ("TRATAMIENTO · TÉCNICA QUIRÚRGICA", 4),
+        ("COMPLICACIONES", 2),
+        ("PERLAS PARA EL EXAMEN", 2),
+    ]
+
+    static func draw(_ paper: PaperStyle, title: String, tint: PaperTint = .white,
+                     in rect: CGRect, context cg: CGContext) {
         let layout = PaperLayout(size: rect.size)
-        UIColor.white.setFill()
+        tint.color.setFill()
         cg.fill(rect)
 
         if !title.isEmpty {
@@ -89,6 +102,43 @@ enum PaperRenderer {
             label("PREGUNTAS Y CLAVES", at: CGPoint(x: 16, y: layout.header + 8))
             label("NOTAS", at: CGPoint(x: cue + 14, y: layout.header + 8))
             label("RESUMEN CON TUS PALABRAS", at: CGPoint(x: 16, y: summary + 8))
+        case .clinicalCase:
+            var y = layout.header
+            for (name, lines) in clinicalSections {
+                cg.setStrokeColor(accent.cgColor)
+                cg.setLineWidth(1.2)
+                cg.move(to: CGPoint(x: 0, y: y))
+                cg.addLine(to: CGPoint(x: rect.maxX, y: y))
+                cg.strokePath()
+                label(name, at: CGPoint(x: 18, y: y + 7))
+                let first = y + 26 + layout.lineSpacing
+                horizontalLines(cg, from: first, to: first + CGFloat(lines) * layout.lineSpacing - 1,
+                                x0: 18, x1: rect.maxX - 18, spacing: layout.lineSpacing)
+                y = first + CGFloat(lines - 1) * layout.lineSpacing + 14
+            }
+        case .qa:
+            let block: CGFloat = layout.lineSpacing * 5 + 22
+            var y = layout.header + 10
+            var n = 1
+            while y + block <= rect.maxY - 10 {
+                // Pregunta
+                cg.setFillColor(accent.withAlphaComponent(0.12).cgColor)
+                cg.fill(CGRect(x: 16, y: y, width: rect.width - 32, height: layout.lineSpacing * 2))
+                label("P\(n)", at: CGPoint(x: 24, y: y + 6))
+                horizontalLines(cg, from: y + layout.lineSpacing, to: y + layout.lineSpacing * 2 + 1,
+                                x0: 60, x1: rect.maxX - 24, spacing: layout.lineSpacing)
+                // Respuesta (para taparla y autoevaluarte)
+                let r = y + layout.lineSpacing * 2 + 6
+                label("R", at: CGPoint(x: 26, y: r + 6))
+                cg.setStrokeColor(line.cgColor)
+                cg.setLineDash(phase: 0, lengths: [4, 4])
+                cg.stroke(CGRect(x: 16, y: r, width: rect.width - 32, height: layout.lineSpacing * 3))
+                cg.setLineDash(phase: 0, lengths: [])
+                horizontalLines(cg, from: r + layout.lineSpacing, to: r + layout.lineSpacing * 3 - 1,
+                                x0: 60, x1: rect.maxX - 24, spacing: layout.lineSpacing)
+                y += block
+                n += 1
+            }
         }
     }
 
@@ -118,6 +168,7 @@ enum PaperRenderer {
 final class PaperView: UIView {
     var paper: PaperStyle = .cornell { didSet { if paper != oldValue { setNeedsDisplay() } } }
     var title: String = "" { didSet { if title != oldValue { setNeedsDisplay() } } }
+    var tint: PaperTint = .white { didSet { if tint != oldValue { setNeedsDisplay() } } }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -131,7 +182,7 @@ final class PaperView: UIView {
 
     override func draw(_ rect: CGRect) {
         guard let cg = UIGraphicsGetCurrentContext() else { return }
-        PaperRenderer.draw(paper, title: title, in: bounds, context: cg)
+        PaperRenderer.draw(paper, title: title, tint: tint, in: bounds, context: cg)
     }
 }
 

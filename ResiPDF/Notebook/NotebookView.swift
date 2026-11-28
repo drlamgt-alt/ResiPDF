@@ -1,33 +1,40 @@
 import SwiftUI
 import PDFKit
 
-/// Qué se ve en el cuaderno: una hoja escrita o un anexo automático.
+/// Qué se ve en el cuaderno.
 enum NotebookSection: Hashable {
+    /// Guía de estudio por temas (se arma sola con las marcas).
+    case guide
+    /// Todas las hojas en miniatura (como en GoodNotes).
+    case overview
     case page(UUID)
     case annex(AnnexKind)
 }
 
-private struct ExportFile: Identifiable {
+struct ExportFiles: Identifiable {
     let id = UUID()
-    let url: URL
+    let urls: [URL]
 }
 
-/// Cuaderno del libro (estilo GoodNotes), junto al PDF.
+/// Cuaderno del libro (estilo GoodNotes). Se abre junto al PDF o solo, desde «Cuadernos».
 struct NotebookView: View {
     @ObservedObject var store: NotebookStore
     @ObservedObject var editor: EditorState
     @ObservedObject var settings: SettingsStore
-    let pdf: PDFDocument
+    /// nil cuando el cuaderno se abre sin su libro (desde «Cuadernos»).
+    let pdf: PDFDocument?
     @Binding var fullScreen: Bool
     var onClose: () -> Void
 
     @State private var section: NotebookSection?
     @StateObject private var canvas = CanvasController()
     @State private var moveImages = false
-    @State private var items: [AnnotationItem] = []
     @State private var renamingID: UUID?
     @State private var renameText = ""
-    @State private var exportFile: ExportFile?
+    @State private var exportFiles: ExportFiles?
+    @State private var exporting = false
+
+    private var standalone: Bool { pdf == nil }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,11 +50,13 @@ struct NotebookView: View {
         .onAppear(perform: selectInitialSection)
         .onChange(of: store.revision) { _, _ in validateSection() }
         .onChange(of: section) { _, newValue in
-            if case .page(let id) = newValue { store.currentPageID = id }
-            if case .annex = newValue { moveImages = false }
+            if case .page(let id) = newValue { store.currentPageID = id } else { moveImages = false }
         }
         .task(id: editor.annotationsVersion) {
-            items = AnnotationBrowser.collect(pdf: pdf, store: settings)
+            // Copia las marcas del libro al cuaderno: así la guía se ve también sin el PDF.
+            guard let pdf else { return }
+            let items = AnnotationBrowser.collect(pdf: pdf, store: settings)
+            store.updateMarks(StudyGuide.build(items: items, pdf: pdf))
         }
         .onDisappear { store.saveNow() }
         .alert("Nombre de la hoja", isPresented: Binding(
@@ -61,20 +70,33 @@ struct NotebookView: View {
             }
             Button("Cancelar", role: .cancel) { renamingID = nil }
         }
-        .sheet(item: $exportFile) { file in
-            ShareSheet(items: [file.url])
+        .sheet(item: $exportFiles) { files in
+            ShareSheet(items: files.urls)
+        }
+        .overlay {
+            if exporting {
+                ProgressView("Exportando…")
+                    .padding(20)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+            }
         }
     }
 
     // MARK: - Barra superior
 
     private var header: some View {
-        HStack(spacing: 14) {
-            Label("Cuaderno", systemImage: "book.pages")
-                .font(.headline)
-                .labelStyle(.titleAndIcon)
+        HStack(spacing: 16) {
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color(UIColor(hex: store.notebook?.coverHex ?? "#3B6FD9")))
+                    .frame(width: 14, height: 20)
+                Text(store.bookName)
+                    .font(.headline)
+                    .lineLimit(1)
+            }
             Spacer(minLength: 0)
-            if isPageSection {
+            if case .page(let id) = section {
+                pageStepper(id)
                 iconButton("pencil.tip.crop.circle", "Mostrar u ocultar bolígrafos") { canvas.toggleTools() }
                 iconButton("arrow.uturn.backward", "Deshacer") { canvas.undo() }
                 iconButton("arrow.uturn.forward", "Rehacer") { canvas.redo() }
@@ -85,10 +107,12 @@ struct NotebookView: View {
                 .accessibilityLabel(moveImages ? "Terminar de mover imágenes" : "Mover imágenes")
             }
             addPageMenu
-            iconButton("square.and.arrow.up", "Exportar cuaderno a PDF") { export() }
-            iconButton(fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                       fullScreen ? "Ver junto al libro" : "Cuaderno a pantalla completa") {
-                withAnimation(.spring(response: 0.35)) { fullScreen.toggle() }
+            exportMenu
+            if !standalone {
+                iconButton(fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                           fullScreen ? "Ver junto al libro" : "Cuaderno a pantalla completa") {
+                    withAnimation(.spring(response: 0.35)) { fullScreen.toggle() }
+                }
             }
             iconButton("xmark", "Cerrar cuaderno") { onClose() }
         }
@@ -103,15 +127,35 @@ struct NotebookView: View {
             .accessibilityLabel(label)
     }
 
+    /// ‹ 2 / 5 › para pasar de hoja como en un cuaderno.
+    private func pageStepper(_ id: UUID) -> some View {
+        let pages = store.pages
+        let index = pages.firstIndex { $0.id == id } ?? 0
+        return HStack(spacing: 6) {
+            Button { section = .page(pages[max(index - 1, 0)].id) } label: { Image(systemName: "chevron.left") }
+                .disabled(index == 0)
+                .accessibilityLabel("Hoja anterior")
+            Text("\(index + 1) / \(pages.count)")
+                .font(.footnote.monospacedDigit().weight(.semibold))
+                .foregroundStyle(.secondary)
+            Button { section = .page(pages[min(index + 1, pages.count - 1)].id) } label: { Image(systemName: "chevron.right") }
+                .disabled(index >= pages.count - 1)
+                .accessibilityLabel("Hoja siguiente")
+        }
+    }
+
     private var addPageMenu: some View {
         Menu {
-            ForEach(PaperStyle.allCases) { paper in
-                Button {
-                    var after: UUID?
-                    if case .page(let id) = section { after = id }
-                    if let id = store.addPage(paper, after: after) { section = .page(id) }
-                } label: {
-                    Label("Hoja \(paper.label.lowercased())", systemImage: paper.symbol)
+            Section("Nueva hoja") {
+                ForEach(PaperStyle.allCases) { paper in
+                    Button {
+                        var after: UUID?
+                        if case .page(let id) = section { after = id }
+                        if let id = store.addPage(paper, after: after) { section = .page(id) }
+                    } label: {
+                        Label(paper.label, systemImage: paper.symbol)
+                        Text(paper.hint)
+                    }
                 }
             }
         } label: {
@@ -121,12 +165,37 @@ struct NotebookView: View {
         .accessibilityLabel("Nueva hoja")
     }
 
+    private var exportMenu: some View {
+        Menu {
+            Section("Exportar cuaderno") {
+                ForEach(NotebookExporter.Format.allCases) { format in
+                    Button { export(format) } label: {
+                        Label(format.label, systemImage: format.symbol)
+                        Text(format.hint)
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+        }
+        .menuIndicator(.hidden)
+        .accessibilityLabel("Exportar")
+    }
+
     // MARK: - Hojas y anexos
 
     private var sectionStrip: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
+                    chip(.guide, selected: section == .guide, highlight: true) {
+                        Label("Guía de estudio", systemImage: "list.star")
+                        countBadge(store.studyMarks.count, selected: section == .guide)
+                    }
+                    chip(.overview, selected: section == .overview) {
+                        Label("Hojas", systemImage: "square.grid.2x2")
+                    }
+                    Divider().frame(height: 22).padding(.horizontal, 4)
                     ForEach(Array(store.pages.enumerated()), id: \.element.id) { index, page in
                         pageChip(page, number: index + 1)
                             .id(NotebookSection.page(page.id))
@@ -150,6 +219,32 @@ struct NotebookView: View {
         }
     }
 
+    private func chip<L: View>(_ target: NotebookSection, selected: Bool, highlight: Bool = false,
+                               @ViewBuilder label: () -> L) -> some View {
+        Button { section = target } label: {
+            HStack(spacing: 5) { label() }
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(selected ? Color.accentColor
+                                           : (highlight ? Color.accentColor.opacity(0.14) : Color(.tertiarySystemFill))))
+                .foregroundStyle(selected ? Color.white : (highlight ? Color.accentColor : Color.primary))
+        }
+        .buttonStyle(.plain)
+        .id(target)
+    }
+
+    @ViewBuilder
+    private func countBadge(_ count: Int, selected: Bool) -> some View {
+        if count > 0 {
+            Text("\(count)")
+                .font(.caption2.weight(.bold).monospacedDigit())
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(Capsule().fill(selected ? Color.white.opacity(0.3) : Color(.systemGray4)))
+        }
+    }
+
     private func pageChip(_ page: NotebookPage, number: Int) -> some View {
         let selected = section == .page(page.id)
         return Button { section = .page(page.id) } label: {
@@ -164,29 +259,12 @@ struct NotebookView: View {
             .foregroundStyle(selected ? Color.white : Color.primary)
         }
         .buttonStyle(.plain)
-        .contextMenu {
-            Button {
-                renameText = page.title
-                renamingID = page.id
-            } label: { Label("Renombrar", systemImage: "pencil") }
-            Menu {
-                ForEach(PaperStyle.allCases) { paper in
-                    Button { store.setPaper(page.id, paper) } label: {
-                        Label(paper.label, systemImage: paper == page.paper ? "checkmark" : paper.symbol)
-                    }
-                }
-            } label: { Label("Tipo de papel", systemImage: "doc.richtext") }
-            if store.pages.count > 1 {
-                Button(role: .destructive) { store.deletePage(page.id) } label: {
-                    Label("Eliminar hoja", systemImage: "trash")
-                }
-            }
-        }
+        .contextMenu { PageMenu(page: page, store: store, onRename: startRename, onOpen: { section = .page($0) }) }
     }
 
     private func annexChip(_ kind: AnnexKind) -> some View {
         let selected = section == .annex(kind)
-        let count = kind == .figures ? store.figures.count : items.filter { $0.action == kind.action }.count
+        let count = kind == .figures ? store.figures.count : AnnexView.entries(kind, in: store.marks).count
         let color = settings.settings.presets.first { $0.action == kind.action }?.color
         return Button { section = .annex(kind) } label: {
             HStack(spacing: 5) {
@@ -196,13 +274,7 @@ struct NotebookView: View {
                     Image(systemName: kind.symbol).font(.caption2)
                 }
                 Text("\(kind.letter) · \(kind.shortTitle)")
-                if count > 0 {
-                    Text("\(count)")
-                        .font(.caption2.weight(.bold).monospacedDigit())
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(selected ? Color.white.opacity(0.3) : Color(.systemGray4)))
-                }
+                countBadge(count, selected: selected)
             }
             .font(.caption.weight(.medium))
             .padding(.horizontal, 10)
@@ -218,6 +290,10 @@ struct NotebookView: View {
     @ViewBuilder
     private var content: some View {
         switch section {
+        case .guide?:
+            StudyGuideView(store: store, standalone: standalone, onGo: goToBookPage)
+        case .overview?:
+            PagesOverview(store: store, onOpen: { section = .page($0) }, onRename: startRename)
         case .page(let id)?:
             PageCanvas(pageID: id, store: store, controller: canvas, moveMode: moveImages) { goToBookPage($0) }
                 .padding(12)
@@ -232,19 +308,19 @@ struct NotebookView: View {
                     }
                 }
         case .annex(let kind)?:
-            AnnexView(kind: kind, items: items, store: store, presets: settings.settings.presets,
+            AnnexView(kind: kind, store: store, presets: settings.settings.presets,
                       onGo: goToBookPage, onInsert: insertFigure)
         case nil:
             Color.clear
         }
     }
 
-    private var isPageSection: Bool {
-        if case .page = section { return true }
-        return false
-    }
-
     // MARK: - Acciones
+
+    private func startRename(_ page: NotebookPage) {
+        renameText = page.title
+        renamingID = page.id
+    }
 
     private func selectInitialSection() {
         if let requested = store.requestedSection {
@@ -255,6 +331,8 @@ struct NotebookView: View {
         guard section == nil else { return }
         if let id = store.currentPageID, store.page(id) != nil {
             section = .page(id)
+        } else if standalone {
+            section = .guide
         } else if let first = store.pages.first {
             section = .page(first.id)
         }
@@ -268,7 +346,10 @@ struct NotebookView: View {
     }
 
     private func goToBookPage(_ index: Int) {
-        guard let page = pdf.page(at: index) else { return }
+        guard let pdf, let page = pdf.page(at: index) else {
+            editor.showToast("Abre el libro para ir a la p. \(index + 1)")
+            return
+        }
         if fullScreen { withAnimation { fullScreen = false } }
         editor.go(to: page)
     }
@@ -280,12 +361,119 @@ struct NotebookView: View {
         editor.showToast("Figura insertada en la hoja")
     }
 
-    private func export() {
+    private func export(_ format: NotebookExporter.Format) {
         store.saveNow()
-        do {
-            exportFile = ExportFile(url: try NotebookExporter.export(store: store, items: items))
-        } catch {
-            editor.showToast("No se pudo exportar el cuaderno")
+        exporting = true
+        DispatchQueue.main.async {
+            defer { exporting = false }
+            do {
+                exportFiles = ExportFiles(urls: try NotebookExporter.export(store: store, format: format))
+            } catch {
+                editor.showToast("No se pudo exportar el cuaderno")
+            }
+        }
+    }
+}
+
+/// Menú de una hoja (renombrar, plantilla, color, duplicar, mover, eliminar).
+struct PageMenu: View {
+    let page: NotebookPage
+    @ObservedObject var store: NotebookStore
+    var onRename: (NotebookPage) -> Void
+    var onOpen: (UUID) -> Void
+
+    var body: some View {
+        Button { onRename(page) } label: { Label("Renombrar", systemImage: "pencil") }
+        Menu {
+            ForEach(PaperStyle.allCases) { paper in
+                Button { store.setPaper(page.id, paper) } label: {
+                    Label(paper.label, systemImage: paper == page.paper ? "checkmark" : paper.symbol)
+                }
+            }
+        } label: { Label("Plantilla", systemImage: "doc.richtext") }
+        Menu {
+            ForEach(PaperTint.allCases) { tint in
+                Button { store.setTint(page.id, tint) } label: {
+                    Label(tint.label, systemImage: tint == page.tint ? "checkmark" : "circle.fill")
+                }
+            }
+        } label: { Label("Color del papel", systemImage: "paintpalette") }
+        Button {
+            if let id = store.duplicatePage(page.id) { onOpen(id) }
+        } label: { Label("Duplicar", systemImage: "plus.square.on.square") }
+        Button { store.movePage(page.id, by: -1) } label: { Label("Mover antes", systemImage: "arrow.left") }
+        Button { store.movePage(page.id, by: 1) } label: { Label("Mover después", systemImage: "arrow.right") }
+        if store.pages.count > 1 {
+            Divider()
+            Button(role: .destructive) { store.deletePage(page.id) } label: {
+                Label("Eliminar hoja", systemImage: "trash")
+            }
+        }
+    }
+}
+
+/// Todas las hojas en miniatura, como la vista de páginas de GoodNotes.
+struct PagesOverview: View {
+    @ObservedObject var store: NotebookStore
+    var onOpen: (UUID) -> Void
+    var onRename: (NotebookPage) -> Void
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 22)], spacing: 26) {
+                ForEach(Array(store.pages.enumerated()), id: \.element.id) { index, page in
+                    Button { onOpen(page.id) } label: {
+                        VStack(spacing: 8) {
+                            PageThumbnail(page: page, store: store, revision: store.revision)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .shadow(color: .black.opacity(0.18), radius: 5, y: 2)
+                            Text("\(index + 1) · \(page.title)")
+                                .font(.caption.weight(.medium))
+                                .lineLimit(1)
+                            Text(page.paper.label)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu { PageMenu(page: page, store: store, onRename: onRename, onOpen: onOpen) }
+                }
+                Menu {
+                    ForEach(PaperStyle.allCases) { paper in
+                        Button {
+                            if let id = store.addPage(paper) { onOpen(id) }
+                        } label: { Label(paper.label, systemImage: paper.symbol) }
+                    }
+                } label: {
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(Color.secondary.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+                        .aspectRatio(Notebook.pageSize.width / Notebook.pageSize.height, contentMode: .fit)
+                        .overlay(Label("Nueva hoja", systemImage: "plus").font(.callout.weight(.semibold)))
+                }
+            }
+            .padding(24)
+        }
+    }
+}
+
+/// Miniatura de una hoja (papel, imágenes y tinta).
+struct PageThumbnail: View {
+    let page: NotebookPage
+    let store: NotebookStore?
+    var revision: Int = 0
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image).resizable().aspectRatio(contentMode: .fit)
+            } else {
+                Rectangle().fill(Color(page.tint.color))
+                    .aspectRatio(Notebook.pageSize.width / Notebook.pageSize.height, contentMode: .fit)
+            }
+        }
+        .task(id: "\(page.id)-\(revision)-\(page.drawing.count)-\(page.paper.rawValue)-\(page.tint.rawValue)") {
+            image = NotebookExporter.render(page, store: store, scale: 0.3)
         }
     }
 }

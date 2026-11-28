@@ -23,6 +23,12 @@ struct TagRequest: Identifiable {
     let point: CGPoint
     var tags: [String]
     let apply: ([String]) -> Void
+    /// Marcador con el que se hizo (para resaltarlo en la barra).
+    var presetID: UUID? = nil
+    /// Cambia el color/estilo de la marca recién hecha con un toque.
+    var recolor: ((MarkPreset) -> Void)? = nil
+    /// Borra la marca recién hecha.
+    var delete: (() -> Void)? = nil
 }
 
 /// Estado del editor de un documento (herramienta activa, color, avisos, página).
@@ -33,6 +39,8 @@ final class EditorState: ObservableObject {
     @Published var noteRequest: NoteRequest?
     /// Punto (coordenadas de la vista PDF) donde mostrar la rueda de colores junto al lápiz.
     @Published var quickPalettePoint: CGPoint?
+    /// Dónde está el dedo mientras se desliza sobre la rueda (mantener pulsado con el dedo).
+    @Published var ringPointer: CGPoint?
     @Published var tagRequest: TagRequest?
     @Published var dockCollapsed = false
     @Published var currentPageIndex = 0

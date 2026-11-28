@@ -3,15 +3,17 @@ import SwiftUI
 /// Hoja de anexo: se llena sola con las marcas del libro (o con las figuras recortadas).
 struct AnnexView: View {
     let kind: AnnexKind
-    let items: [AnnotationItem]
     @ObservedObject var store: NotebookStore
     let presets: [MarkPreset]
     let onGo: (Int) -> Void
     let onInsert: (NotebookFigure) -> Void
 
-    private var entries: [AnnotationItem] {
-        items.filter { $0.action == kind.action && !$0.group.hasPrefix("Sello") && $0.group != "Comentarios" }
+    static func entries(_ kind: AnnexKind, in marks: [StudyMark]) -> [StudyMark] {
+        marks.filter { $0.action == kind.action && !$0.group.hasPrefix("Sello") && $0.group != "Comentarios" }
+            .sorted { $0.pageIndex < $1.pageIndex }
     }
+
+    private var entries: [StudyMark] { Self.entries(kind, in: store.marks) }
 
     private var hint: String {
         if kind == .figures {
@@ -67,7 +69,7 @@ struct AnnexView: View {
                         .foregroundStyle(Color(item.color.withAlphaComponent(1)))
                         .frame(minWidth: 28, alignment: .trailing)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(item.text.isEmpty ? "(\(item.kind.lowercased()))" : item.text)
+                        Text(item.displayText)
                             .font(kind == .questions ? .body.weight(.medium) : .body)
                             .foregroundStyle(.primary)
                             .textSelection(.enabled)

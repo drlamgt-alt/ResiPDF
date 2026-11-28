@@ -252,11 +252,15 @@ struct SettingsView: View {
 
     private var speedSection: some View {
         Section {
+            Toggle("Dedo quieto sobre la página = rueda de colores", isOn: $store.settings.fingerRing)
+            Toggle("Tras marcar, cambiar el color con un toque", isOn: $store.settings.quickRecolor)
             Toggle("Mantener pulsado = color temporal", isOn: $store.settings.springLoaded)
             Toggle("Volver al color tras flecha, sello o comentario", isOn: $store.settings.autoReturn)
             Toggle("Dos dedos = deshacer (tres = rehacer)", isOn: $store.settings.twoFingerUndo)
         } header: {
             Text("Velocidad")
+        } footer: {
+            Text("Con una mano: deja el dedo quieto en la página, desliza hasta el color y suelta. Con dos manos: el Pencil en la derecha y el pulgar izquierdo en el dock (ponlo a la izquierda y tamaño «Pulgar»). Si te equivocas de color, toca el correcto en la barra que aparece junto a la marca.")
         }
     }
 

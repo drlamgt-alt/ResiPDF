@@ -1,5 +1,6 @@
 import UIKit
 import PDFKit
+import SwiftUI
 
 /// Una anotación junto con la página donde vive (para deshacer/rehacer).
 struct PlacedAnnotation {
@@ -25,6 +26,8 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
     private let undoTap = UITapGestureRecognizer()
     private let redoTap = UITapGestureRecognizer()
     private let hover = UIHoverGestureRecognizer()
+    /// Mantener el dedo quieto sobre la página = rueda de colores bajo el dedo.
+    private let ringPress = UILongPressGestureRecognizer()
     private let preview = CAShapeLayer()
     /// Punto del color activo bajo la punta del Pencil (iPad con hover).
     private let hoverDot = CAShapeLayer()
@@ -57,7 +60,7 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
     static let groupPrefix = "resi:"
     static let stampPrefix = "resistamp:"
 
-    private var ownRecognizers: [UIGestureRecognizer] { [stroke, maskTap, undoTap, redoTap, hover] }
+    private var ownRecognizers: [UIGestureRecognizer] { [stroke, maskTap, undoTap, redoTap, hover, ringPress] }
     static let favoriteSymbol = "⭐"
 
     // MARK: - Configuración
@@ -105,6 +108,13 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
         view.layer.addSublayer(hoverDot)
         hover.addTarget(self, action: #selector(handleHover(_:)))
         view.addGestureRecognizer(hover)
+
+        ringPress.minimumPressDuration = 0.35
+        ringPress.allowableMovement = 14
+        ringPress.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        ringPress.addTarget(self, action: #selector(handleRingPress(_:)))
+        ringPress.delegate = self
+        view.addGestureRecognizer(ringPress)
 
         let pencil = UIPencilInteraction()
         pencil.delegate = self
@@ -181,6 +191,7 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
         stroke.isEnabled = annotating
         undoTap.isEnabled = store.settings.twoFingerUndo
         redoTap.isEnabled = store.settings.twoFingerUndo
+        ringPress.isEnabled = annotating && store.settings.fingerRing && !finger
 
         configureBuiltInGestures(in: view, annotating: annotating, fingerDrawing: finger)
     }
@@ -210,6 +221,12 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
         return gestureRecognizer === maskTap || gestureRecognizer === undoTap || gestureRecognizer === redoTap
     }
 
+    /// La selección de texto del PDF (mantener pulsado) espera a que la rueda descarte el gesto.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                           shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+        gestureRecognizer === ringPress && other is UILongPressGestureRecognizer && other !== ringPress
+    }
+
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         // La tapa con Pencil mientras se anota la gestiona el trazo.
         if gestureRecognizer === maskTap, touch.type == .pencil, stroke.isEnabled { return false }
@@ -235,6 +252,49 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
         let name = um.redoActionName
         um.redo()
         editor.showToast(name.isEmpty ? "Rehacer" : "Rehacer: \(name)")
+    }
+
+    // MARK: - Rueda de colores con el dedo
+
+    @objc private func handleRingPress(_ g: UILongPressGestureRecognizer) {
+        guard let view = pdfView else { return }
+        let p = g.location(in: view)
+        switch g.state {
+        case .began:
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            if editor.tagRequest != nil { editor.tagRequest = nil }
+            withAnimation(.spring(response: 0.25)) {
+                editor.quickPalettePoint = p
+                editor.ringPointer = p
+            }
+        case .changed:
+            let presets = store.settings.presets
+            if let center = editor.quickPalettePoint {
+                let before = QuickRing.hit(editor.ringPointer ?? center, center: center, in: view.bounds.size, count: presets.count)
+                let now = QuickRing.hit(p, center: center, in: view.bounds.size, count: presets.count)
+                if now != before, now != nil { UISelectionFeedbackGenerator().selectionChanged() }
+            }
+            editor.ringPointer = p
+        case .ended:
+            let presets = store.settings.presets
+            guard let center = editor.quickPalettePoint else { return }
+            if let i = QuickRing.hit(p, center: center, in: view.bounds.size, count: presets.count),
+               presets.indices.contains(i) {
+                // Deslizar y soltar sobre un color = elegirlo.
+                editor.select(.preset(presets[i].id), store: store)
+                withAnimation(.spring(response: 0.25)) {
+                    editor.quickPalettePoint = nil
+                    editor.ringPointer = nil
+                }
+            } else {
+                // Soltar sin moverse: la rueda queda abierta para tocar un color.
+                editor.ringPointer = nil
+            }
+        case .cancelled, .failed:
+            editor.ringPointer = nil
+        default:
+            break
+        }
     }
 
     // MARK: - Apple Pencil: doble toque y apretón (Pencil Pro)
@@ -655,13 +715,63 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
     // MARK: - Etiquetas (Dx, Tx, Cx…)
 
     private func offerTags(group: String, page: PDFPage, at viewPoint: CGPoint) {
-        let request = TagRequest(groupID: group, point: viewPoint, tags: []) { [weak self] tags in
+        var presetID: UUID?
+        if case .mark(let preset) = mode { presetID = preset.id }
+        var request = TagRequest(groupID: group, point: viewPoint, tags: []) { [weak self] tags in
             self?.setTags(tags, group: group, page: page)
         }
+        request.presetID = presetID
+        request.recolor = { [weak self] preset in self?.restyle(group: group, page: page, to: preset) }
+        request.delete = { [weak self] in
+            guard let self else { return }
+            let members = page.annotations.filter { Self.groupID(of: ) == group }
+                .map { PlacedAnnotation(page: page, annotation: ) }
+            self.removeAnnotations(members, actionName: "Borrar marca")
+            if self.editor.lastTagTarget?.groupID == group { self.editor.lastTagTarget = nil }
+        }
         editor.lastTagTarget = request
-        if store.settings.autoTagBar && !store.settings.tags.isEmpty {
+        let showTags = store.settings.autoTagBar && !store.settings.tags.isEmpty
+        if showTags || store.settings.quickRecolor {
             editor.tagRequest = request
         }
+    }
+
+    /// Cambia el color y estilo de una marca ya hecha (con deshacer). Conserva su texto y etiquetas.
+    func restyle(group: String, page: PDFPage, to preset: MarkPreset) {
+        let old = page.annotations.filter { Self.groupID(of: ) == group }
+        guard !old.isEmpty else { return }
+        let new: [PDFAnnotation] = old.map { a in
+            if a.type == "Ink" {
+                // Marca a mano (PDF escaneado): mismo trazo con el color nuevo.
+                let copy = (a.copy() as? PDFAnnotation) ?? a
+                copy.color = preset.style == .highlight
+                    ? preset.color.withAlphaComponent(CGFloat(store.settings.highlightOpacity))
+                    : preset.color
+                return copy
+            }
+            let r = a.type == "Square" ? a.bounds.insetBy(dx: 1.5, dy: 1) : a.bounds
+            let b = makeMarkup(preset, bounds: r)
+            b.setValue(a.value(forAnnotationKey: .name) ?? "", forAnnotationKey: .name)
+            b.contents = a.contents
+            b.userName = "ResiPDF"
+            AnnotationTags.setTags(AnnotationTags.tags(of: a), on: b)
+            return b
+        }
+        swapAnnotations(remove: old, add: new, on: page, actionName: preset.name)
+        if editor.tagRequest?.groupID == group { editor.tagRequest?.presetID = preset.id }
+        if editor.lastTagTarget?.groupID == group { editor.lastTagTarget?.presetID = preset.id }
+        editor.showToast("Cambiado a \(preset.name)")
+    }
+
+    private func swapAnnotations(remove old: [PDFAnnotation], add new: [PDFAnnotation],
+                                 on page: PDFPage, actionName: String) {
+        old.forEach { page.removeAnnotation() }
+        new.forEach { page.addAnnotation() }
+        editor.annotationsVersion += 1
+        undoManager?.registerUndo(withTarget: self) { target in
+            target.swapAnnotations(remove: new, add: old, on: page, actionName: actionName)
+        }
+        undoManager?.setActionName(actionName)
     }
 
     func setTags(_ tags: [String], group: String, page: PDFPage) {
