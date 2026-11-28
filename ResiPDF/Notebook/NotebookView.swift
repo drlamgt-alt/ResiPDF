@@ -85,15 +85,18 @@ struct NotebookView: View {
     // MARK: - Barra superior
 
     private var header: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
             HStack(spacing: 8) {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(Color(UIColor(hex: store.notebook?.coverHex ?? "#3B6FD9")))
                     .frame(width: 14, height: 20)
-                Text(store.bookName)
-                    .font(.headline)
-                    .lineLimit(1)
+                // Si no cabe junto a los botones, se oculta el título (el color de portada queda).
+                ViewThatFits(in: .horizontal) {
+                    Text(store.bookName).font(.headline).lineLimit(1)
+                    Color.clear.frame(width: 0, height: 0)
+                }
             }
+            .layoutPriority(-1)
             Spacer(minLength: 0)
             if case .page(let id) = section {
                 pageStepper(id)
@@ -138,6 +141,7 @@ struct NotebookView: View {
             Text("\(index + 1) / \(pages.count)")
                 .font(.footnote.monospacedDigit().weight(.semibold))
                 .foregroundStyle(.secondary)
+                .fixedSize()
             Button { section = .page(pages[min(index + 1, pages.count - 1)].id) } label: { Image(systemName: "chevron.right") }
                 .disabled(index >= pages.count - 1)
                 .accessibilityLabel("Hoja siguiente")
