@@ -724,8 +724,8 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
         request.recolor = { [weak self] preset in self?.restyle(group: group, page: page, to: preset) }
         request.delete = { [weak self] in
             guard let self else { return }
-            let members = page.annotations.filter { Self.groupID(of: ) == group }
-                .map { PlacedAnnotation(page: page, annotation: ) }
+            let members = page.annotations.filter { Self.groupID(of: $0) == group }
+                .map { PlacedAnnotation(page: page, annotation: $0) }
             self.removeAnnotations(members, actionName: "Borrar marca")
             if self.editor.lastTagTarget?.groupID == group { self.editor.lastTagTarget = nil }
         }
@@ -738,7 +738,7 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
 
     /// Cambia el color y estilo de una marca ya hecha (con deshacer). Conserva su texto y etiquetas.
     func restyle(group: String, page: PDFPage, to preset: MarkPreset) {
-        let old = page.annotations.filter { Self.groupID(of: ) == group }
+        let old = page.annotations.filter { Self.groupID(of: $0) == group }
         guard !old.isEmpty else { return }
         let new: [PDFAnnotation] = old.map { a in
             if a.type == "Ink" {
@@ -751,7 +751,9 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
             }
             let r = a.type == "Square" ? a.bounds.insetBy(dx: 1.5, dy: 1) : a.bounds
             let b = makeMarkup(preset, bounds: r)
-            b.setValue(a.value(forAnnotationKey: .name) ?? "", forAnnotationKey: .name)
+            if let name = a.value(forAnnotationKey: PDFAnnotationKey.name) as? String {
+                b.setValue(name, forAnnotationKey: PDFAnnotationKey.name)
+            }
             b.contents = a.contents
             b.userName = "ResiPDF"
             AnnotationTags.setTags(AnnotationTags.tags(of: a), on: b)
@@ -765,8 +767,8 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
 
     private func swapAnnotations(remove old: [PDFAnnotation], add new: [PDFAnnotation],
                                  on page: PDFPage, actionName: String) {
-        old.forEach { page.removeAnnotation() }
-        new.forEach { page.addAnnotation() }
+        old.forEach { page.removeAnnotation($0) }
+        new.forEach { page.addAnnotation($0) }
         editor.annotationsVersion += 1
         undoManager?.registerUndo(withTarget: self) { target in
             target.swapAnnotations(remove: new, add: old, on: page, actionName: actionName)
