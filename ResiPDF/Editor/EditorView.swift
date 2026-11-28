@@ -5,10 +5,12 @@ struct EditorView: View {
     @ObservedObject var document: PDFFileDocument
     @EnvironmentObject private var store: SettingsStore
     @Environment(\.undoManager) private var undoManager
+    @Environment(\.colorScheme) private var colorScheme
     @StateObject private var editor = EditorState()
 
     @State private var showSettings = false
     @State private var showLibrary = false
+    @State private var showLegend = false
     @State private var showSearch = false
     @State private var showSidebar = false
     @State private var sidebarTab: SidebarTab = .outline
@@ -66,6 +68,11 @@ struct EditorView: View {
         .animation(.easeOut(duration: 0.2), value: editor.toast)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showSidebar)
         .toolbar { toolbarContent }
+        .preferredColorScheme(store.settings.appearance.scheme)
+        .tint(Theme.accent)
+        .sheet(isPresented: $showLegend) {
+            ColorLegendView().environmentObject(store)
+        }
         .sheet(isPresented: $showSettings) {
             SettingsView().environmentObject(store)
         }
@@ -181,8 +188,16 @@ struct EditorView: View {
         return thickness + DockView.margin * 2 + labelSpace
     }
 
+    /// Tono real de la página: «Automático» = noche cuando el iPad está en modo oscuro.
+    private var effectiveTone: PageTone {
+        let tone = store.settings.pageTone
+        if tone == .auto { return colorScheme == .dark ? .night : .day }
+        return tone
+    }
+
     private var canvas: some View {
         PDFCanvasView(document: document.pdf, editor: editor, store: store, undoManager: undoManager)
+            .modifier(PageToneModifier(tone: effectiveTone))
             .overlay { canvasOverlays }
             .overlay(alignment: .topTrailing) { pageChip }
             .padding(store.settings.dockEdge.edgeSet, dockInset)
@@ -284,6 +299,12 @@ struct EditorView: View {
                 Picker("Lectura", selection: $store.settings.readingMode) {
                     ForEach(ReadingMode.allCases) { Text($0.label).tag($0) }
                 }
+                Picker(selection: $store.settings.pageTone) {
+                    ForEach(PageTone.allCases) { Label($0.label, systemImage: $0.symbol).tag($0) }
+                } label: {
+                    Label("Color de la página", systemImage: "moon.stars")
+                }
+                .pickerStyle(.menu)
                 Button {
                     sidebarTab = .marks
                     showSidebar = true
@@ -314,6 +335,10 @@ struct EditorView: View {
                     Text(profile.name).tag(profile.id)
                 }
             }
+            Divider()
+            Button { showLegend = true } label: {
+                Label("Qué significa cada color", systemImage: "info.circle")
+            }
         } label: {
             Label(store.settings.activeProfile.name, systemImage: "paintpalette")
         }
@@ -324,7 +349,12 @@ struct EditorView: View {
     private func openDemoScreenIfRequested() {
         let args = ProcessInfo.processInfo.arguments
         guard args.contains("-demo") else { return }
+        // Las capturas empiezan siempre en modo día (salvo la de noche).
+        let night = args.contains("-demoNight")
+        store.settings.pageTone = night ? .night : .day
+        store.settings.appearance = night ? .dark : .system
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            if args.contains("-demoLegend") { showLegend = true }
             if args.contains("-demoSettings") { showSettings = true }
             if args.contains("-demoLibrary") {
                 DemoNotebook.populate(notebook, pdf: document.pdf, settings: store)
@@ -345,6 +375,7 @@ struct EditorView: View {
             if args.contains("-demoNotebook") || args.contains("-demoAnnex") || args.contains("-demoGuide") || args.contains("-demoPages") {
                 DemoNotebook.populate(notebook, pdf: document.pdf, settings: store)
                 if args.contains("-demoAnnex") { notebook.requestedSection = .annex(.questions) }
+                if night, let first = notebook.pages.first { notebook.setTint(first.id, .night) }
                 if args.contains("-demoGuide") { notebook.requestedSection = .guide; notebookFull = true }
                 if args.contains("-demoPages") { notebook.requestedSection = .overview; notebookFull = true }
                 showNotebook = true

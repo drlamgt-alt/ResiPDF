@@ -79,6 +79,9 @@ jobs:
           shoot "$PRO"  10-mis-cuadernos -demoLibrary
           shoot "$PRO"  11-guia-de-estudio -demoGuide
           shoot "$PRO"  12-hojas -demoPages
+          shoot "$PRO"  13-leyenda-7-colores -demoLegend
+          shoot "$PRO"  14-modo-noche -demoNight
+          shoot "$PRO"  15-noche-cuaderno -demoNight -demoNotebook
           shoot "$MINI" 7-editor-ipad-mini
           ls -la capturas
 

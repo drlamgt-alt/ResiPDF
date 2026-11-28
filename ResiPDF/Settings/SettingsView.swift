@@ -10,6 +10,7 @@ struct SettingsView: View {
     @ObservedObject private var sync = SyncFolder.shared
     @State private var pickFolder = false
     @State private var confirmDisconnect = false
+    @State private var showLegend = false
 
     private var stampsText: Binding<String> {
         Binding(
@@ -28,6 +29,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 syncSection
+                appearanceSection
                 patternSection
                 presetsSection
                 tagsSection
@@ -56,6 +58,9 @@ struct SettingsView: View {
                 Button("Dejar de sincronizar", role: .destructive) { sync.disconnect() }
             } message: {
                 Text("Se guarda una copia de los cuadernos en este iPad y los cambios dejan de compartirse. La carpeta de iCloud Drive no se borra.")
+            }
+            .sheet(isPresented: $showLegend) {
+                ColorLegendView().environmentObject(store)
             }
             .alert("Nueva etiqueta", isPresented: $showNewTag) {
                 TextField("Ej. Pediatría", text: $newTag)
@@ -117,6 +122,24 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Apariencia
+
+    private var appearanceSection: some View {
+        Section {
+            Picker("App", selection: $store.settings.appearance) {
+                ForEach(AppAppearance.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            Picker("Página del PDF", selection: $store.settings.pageTone) {
+                ForEach(PageTone.allCases) { Label($0.label, systemImage: $0.symbol).tag($0) }
+            }
+        } header: {
+            Text("Apariencia")
+        } footer: {
+            Text("Noche: fondo oscuro y letras claras, tus colores mantienen su tono. Sepia: papel cálido para sesiones largas. Automático: noche cuando el iPad está en modo oscuro. En el cuaderno, elige «Noche» como color del papel.")
+        }
+    }
+
     // MARK: - Patrón de colores
 
     private var patternSection: some View {
@@ -128,6 +151,9 @@ struct SettingsView: View {
                 ForEach(store.settings.profiles) { Text($0.name).tag($0.id) }
             }
             TextField("Nombre del patrón", text: $store.settings.activeProfileName)
+            Button { showLegend = true } label: {
+                Label("Qué significa cada color", systemImage: "info.circle")
+            }
 
             Menu {
                 Section("Plantillas") {
@@ -158,7 +184,7 @@ struct SettingsView: View {
         } header: {
             Text("Patrón de colores")
         } footer: {
-            Text("Un patrón es tu sistema de colores. El recomendado usa 5 colores, cada uno ligado a lo que harás al repasar; el tema clínico va en etiquetas. Cámbialo rápido con 🎨 en la barra superior.")
+            Text("Un patrón es tu sistema de colores. El recomendado, «Residente de cirugía», usa 7 colores, cada uno ligado a lo que harás al repasar; el tema clínico va en etiquetas. Cámbialo rápido con 🎨 en la barra superior.")
         }
     }
 
@@ -359,8 +385,12 @@ struct PresetEditor: View {
             Section {
                 preview
             }
-            Section("Significado") {
+            Section {
                 TextField("Ej. Pregunta de examen", text: $preset.name)
+                TextField("Qué va con este color (ej. cifras, dosis, criterios)", text: $preset.detail, axis: .vertical)
+                    .lineLimit(2...4)
+            } header: {
+                Text("Significado")
             }
             Section {
                 Picker("Acción", selection: $preset.action) {

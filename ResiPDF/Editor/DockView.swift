@@ -63,7 +63,7 @@ struct DockView: View {
     /// Tamaño de los círculos: el preferido, o menor si no caben todos.
     private func dotSize(for area: CGSize) -> CGFloat {
         let preferred = store.settings.buttonSize.points
-        let items = CGFloat(store.settings.presets.count + 7)
+        let items = CGFloat(store.settings.presets.count + 8)
         let length = (edge.isVertical ? area.height : area.width) - 2 * Self.margin - 40
         let fit = (length - spacing * (items - 1)) / items - 6
         return max(24, min(preferred, fit))
@@ -105,6 +105,7 @@ struct DockView: View {
                     presetDot(preset, index: index, size: size)
                 }
                 divider
+                styleToggle(size: size)
                 tagMenu(size: size)
                 toolsMenu(size: size)
                 toolButton(.eraser, symbol: "eraser", label: "Borrador", size: size)
@@ -141,6 +142,9 @@ struct DockView: View {
     private func activeLabel(_ preset: MarkPreset) -> some View {
         HStack(spacing: 6) {
             Circle().fill(Color(preset.color)).frame(width: 8, height: 8)
+            if editor.styleSwap {
+                Image(systemName: editor.effectiveStyle(of: preset).symbol).font(.caption2.weight(.bold))
+            }
             Text(preset.name).font(.caption.weight(.semibold))
             Text("· \(preset.action.destination)").font(.caption).foregroundStyle(.secondary)
         }
@@ -214,13 +218,14 @@ struct DockView: View {
         let selected = editor.tool == .preset(preset.id)
         let color = Color(preset.color)
         let diameter = selected ? size + 4 : size - 2
+        let style = editor.effectiveStyle(of: preset)
         return ZStack {
-            if preset.style == .highlight {
+            if style == .highlight {
                 Circle().fill(color)
             } else {
                 Circle().fill(Color(.systemBackground))
                 Circle().strokeBorder(color, lineWidth: 4)
-                Image(systemName: preset.style.symbol)
+                Image(systemName: style.symbol)
                     .font(.system(size: size * 0.36, weight: .bold))
                     .foregroundStyle(color)
             }
@@ -303,6 +308,17 @@ struct DockView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+    }
+
+    /// Resaltar ↔ Subrayar con los mismos colores (igual que el doble toque del Pencil).
+    private func styleToggle(size: CGFloat) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.25)) { editor.toggleStyle(store: store) }
+        } label: {
+            roundIcon(editor.styleSwap ? "underline" : "highlighter", selected: editor.styleSwap, size: size)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(editor.styleSwap ? "Volver a resaltar" : "Subrayar con los mismos colores")
     }
 
     private func tagMenu(size: CGFloat) -> some View {

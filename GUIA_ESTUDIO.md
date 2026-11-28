@@ -9,16 +9,23 @@
 
 Por eso ResiPDF usa **dos capas**:
 
-### Capa 1: 5 colores, uno por acción de repaso (patrón «Estudio activo»)
+### Capa 1: 7 colores, uno por acción de repaso (patrón «Residente de cirugía»)
 
-| Color | Estilo | Significa | Qué hace la app |
-|---|---|---|---|
-| 🟨 Ámbar | Resaltar | **Idea principal** | Va al resumen |
-| 🟪 Violeta | Resaltar | **Pregunta de examen** | Se vuelve pregunta para autoevaluarte |
-| 🟥 Rojo | Subrayar | **Memorizar literal**: cifras, dosis, criterios | Se tapa en modo examen |
-| 🟩 Verde | Resaltar | **Conexión**: «esto explica aquello» | Une los conceptos con una flecha |
-| ⬜ Gris | Subrayar | **No lo entendí** | Va a la lista de dudas |
+| # | Color | Estilo | Significa | Qué hace la app |
+|---|---|---|---|---|
+| 1 | 🟨 Ámbar | Resaltar | **Idea principal**: lo esencial del párrafo (máximo una por párrafo) | Va al resumen y a la guía |
+| 2 | 🟪 Violeta | Resaltar | **Pregunta de examen**: lo que te preguntarían en el examen o en el pase de visita | Guía de estudio, Anexo A y tarjetas de Anki |
+| 3 | 🟥 Rojo | Subrayar | **Memorizar exacto**: cifras, dosis, criterios, escalas | Anexo B; se tapa en modo examen |
+| 4 | 🟩 Verde | Resaltar | **Conducta y tratamiento**: indicación, técnica, manejo | Únelo con lo que ya sabes |
+| 5 | 🟦 Azul | Subrayar | **Definición**: conceptos base | Va al resumen |
+| 6 | 🟧 Naranja | Recuadro | **Alerta clínica**: complicaciones, contraindicaciones, errores graves | Anexo B (no se puede olvidar) |
+| 7 | ⬜ Gris | Subrayar | **No lo entendí** | Anexo D: lista de dudas para el adjunto |
 
+Los colores 1–5 son los de uso diario y los 6–7, de uso ocasional. Si un párrafo tiene más de dos colores, estás marcando de más.
+
+**Doble toque del Pencil:** el mismo color pasa de **resaltar a subrayar** y al revés. Así tienes 7 colores × 2 estilos sin buscar en el dock. El botón 🖍/U del dock hace lo mismo con el dedo.
+
+**¿Qué significa cada color?** En 🎨 (barra superior) → «Qué significa cada color».
 ### Capa 2: etiquetas clínicas
 
 **Dx · Tx · Cx · Qx · Anatomía · Clasificación · Fisiopato · Epidemio** (editables en Preferencias).
@@ -32,7 +39,10 @@ Al levantar el Pencil aparece la barra de etiquetas junto a la marca: toca **Cx*
 - **Dock de colores:** abajo por defecto. Arrástralo desde su asa a cualquier borde; con la mano izquierda, ponlo a la izquierda.
 - **Toque** en un color = lo eliges. **Mantener pulsado** = color temporal: subrayas con el Pencil y, al soltar, vuelves al anterior.
 - **Teclas 1–9** con teclado externo.
-- **Doble toque del Pencil** = vuelve al color anterior. **Apretar (Pencil Pro)** = rueda de colores junto a la punta.
+- **Doble toque del Pencil** = mismo color: resaltar ↔ subrayar (cámbialo en Preferencias → Apple Pencil). **Apretar (Pencil Pro)** = rueda de colores junto a la punta.
+- **Una sola mano:** deja el dedo quieto en la página, desliza hasta el color y suelta.
+- **¿Te equivocaste de color?** Toca el correcto en la barra que aparece junto a la marca.
+- **De noche:** ⋯ → Color de la página → Noche (o Sepia). En el cuaderno, papel «Noche».
 - **Hover** (iPad con M2+ / Pencil Pro): ves el color activo bajo la punta antes de tocar.
 - **Dos dedos** = deshacer · **tres dedos** = rehacer.
 - **Arrastra el Pencil sobre la línea**: la marca se ajusta a las palabras aunque el trazo salga torcido.

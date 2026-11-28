@@ -246,6 +246,9 @@ struct PageCanvas: UIViewRepresentable {
         canvas.paperView.paper = page.paper
         canvas.paperView.title = page.title
         canvas.paperView.tint = page.tint
+        // Papel de noche: la tinta negra se ve blanca (y se guarda igual; al exportar vuelve a negro).
+        let style: UIUserInterfaceStyle = page.tint.isDark ? .dark : .light
+        if canvas.overrideUserInterfaceStyle != style { canvas.overrideUserInterfaceStyle = style }
         canvas.setImages(page.images) { store.image(named: $0) }
     }
 

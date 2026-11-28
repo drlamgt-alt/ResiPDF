@@ -46,7 +46,7 @@ enum PaperStyle: String, Codable, CaseIterable, Identifiable {
 
 /// Color del papel.
 enum PaperTint: String, Codable, CaseIterable, Identifiable {
-    case white, cream, blue, green, gray
+    case white, cream, blue, green, gray, night
 
     var id: String { rawValue }
 
@@ -57,6 +57,7 @@ enum PaperTint: String, Codable, CaseIterable, Identifiable {
         case .blue: return "Azul suave"
         case .green: return "Verde suave"
         case .gray: return "Gris claro"
+        case .night: return "Noche"
         }
     }
 
@@ -67,8 +68,12 @@ enum PaperTint: String, Codable, CaseIterable, Identifiable {
         case .blue: return UIColor(red: 0.937, green: 0.957, blue: 0.992, alpha: 1)
         case .green: return UIColor(red: 0.937, green: 0.976, blue: 0.945, alpha: 1)
         case .gray: return UIColor(white: 0.95, alpha: 1)
+        case .night: return UIColor(red: 0.11, green: 0.12, blue: 0.15, alpha: 1)
         }
     }
+
+    /// Papel oscuro: la tinta del Pencil se muestra clara (PencilKit la adapta sola).
+    var isDark: Bool { self == .night }
 }
 
 /// Imagen colocada sobre una hoja (coordenadas de la hoja, en puntos).

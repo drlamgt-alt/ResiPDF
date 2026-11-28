@@ -3,12 +3,13 @@ import Combine
 
 /// Acción asignable al doble toque / apretón del Apple Pencil.
 enum PencilAction: String, Codable, CaseIterable, Identifiable {
-    case quickPalette, previousTool, eraser, nextPreset, none
+    case toggleStyle, quickPalette, previousTool, eraser, nextPreset, none
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
+        case .toggleStyle: return "Resaltar ↔ Subrayar (mismo color)"
         case .quickPalette: return "Abrir colores junto al lápiz"
         case .previousTool: return "Volver a la herramienta anterior"
         case .eraser: return "Borrador ↔ herramienta actual"
@@ -54,6 +55,48 @@ enum DockEdge: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+/// Tono de la página del PDF al leer.
+enum PageTone: String, Codable, CaseIterable, Identifiable {
+    case auto, day, sepia, night
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .auto: return "Automático"
+        case .day: return "Día"
+        case .sepia: return "Sepia"
+        case .night: return "Noche"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .auto: return "circle.lefthalf.filled"
+        case .day: return "sun.max"
+        case .sepia: return "cup.and.saucer"
+        case .night: return "moon.stars"
+        }
+    }
+}
+
+/// Apariencia de la app (barras, menús, cuaderno).
+enum AppAppearance: String, Codable, CaseIterable, Identifiable {
+    case system, light, dark
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .system: return "Como el iPad"
+        case .light: return "Clara"
+        case .dark: return "Oscura"
+        }
+    }
+    var scheme: ColorScheme? {
+        switch self {
+        case .system: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
 enum ReadingMode: String, Codable, CaseIterable, Identifiable {
     case continuous, paged
     var id: String { rawValue }
@@ -74,7 +117,7 @@ struct AppSettings: Codable, Equatable {
     var highlightOpacity: Double = 0.45
     var penWidth: Double = 2.0
     var fingerDrawing: Bool = false
-    var doubleTap: PencilAction = .previousTool
+    var doubleTap: PencilAction = .toggleStyle
     var squeeze: PencilAction = .quickPalette
     var pencilHover: Bool = true
     var springLoaded: Bool = true
@@ -89,6 +132,9 @@ struct AppSettings: Codable, Equatable {
     var fingerRing: Bool = true
     /// La barra que aparece tras marcar muestra los colores para cambiarlo con un toque.
     var quickRecolor: Bool = true
+    /// Automático = noche cuando el iPad está en modo oscuro.
+    var pageTone: PageTone = .auto
+    var appearance: AppAppearance = .system
 
     init() {}
 
@@ -124,7 +170,7 @@ struct AppSettings: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case profiles, activeProfileID, dockEdge, dockOffset, buttonSize, highlightOpacity, penWidth,
              fingerDrawing, doubleTap, squeeze, pencilHover, springLoaded, autoReturn, twoFingerUndo,
-             stamps, currentStamp, tags, autoTagBar, readingMode, fingerRing, quickRecolor
+             stamps, currentStamp, tags, autoTagBar, readingMode, fingerRing, quickRecolor, pageTone, appearance
     }
 
     init(from decoder: Decoder) throws {
@@ -155,7 +201,13 @@ struct AppSettings: Codable, Equatable {
         readingMode = value(.readingMode, d.readingMode)
         fingerRing = value(.fingerRing, d.fingerRing)
         quickRecolor = value(.quickRecolor, d.quickRecolor)
+        pageTone = value(.pageTone, d.pageTone)
+        appearance = value(.appearance, d.appearance)
         if profiles.isEmpty { profiles = d.profiles }
+        // El patrón recomendado de 7 colores se añade a quien ya tenía la app (sin tocar el activo).
+        if !profiles.contains(where: { $0.name == PresetProfile.residentName }) {
+            profiles.insert(PresetProfile.resident, at: 0)
+        }
     }
 }
 

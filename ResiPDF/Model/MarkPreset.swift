@@ -88,18 +88,22 @@ struct MarkPreset: Identifiable, Codable, Equatable, Hashable {
     var hex: String
     var style: MarkStyle
     var action: ReviewAction
+    /// Qué va con este color, explicado en una frase (se muestra en la leyenda).
+    var detail: String
 
     var color: UIColor { UIColor(hex: hex) }
 
-    init(id: UUID = UUID(), name: String, hex: String, style: MarkStyle, action: ReviewAction = .none) {
+    init(id: UUID = UUID(), name: String, hex: String, style: MarkStyle,
+         action: ReviewAction = .none, detail: String = "") {
         self.id = id
         self.name = name
         self.hex = hex
         self.style = style
         self.action = action
+        self.detail = detail
     }
 
-    enum CodingKeys: String, CodingKey { case id, name, hex, style, action }
+    enum CodingKeys: String, CodingKey { case id, name, hex, style, action, detail }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -108,6 +112,7 @@ struct MarkPreset: Identifiable, Codable, Equatable, Hashable {
         hex = (try? c.decode(String.self, forKey: .hex)) ?? "#FFC94D"
         style = (try? c.decode(MarkStyle.self, forKey: .style)) ?? .highlight
         action = (try? c.decode(ReviewAction.self, forKey: .action)) ?? .none
+        detail = (try? c.decode(String.self, forKey: .detail)) ?? ""
     }
 }
 
@@ -120,7 +125,32 @@ struct PresetProfile: Identifiable, Codable, Equatable, Hashable {
 
 extension PresetProfile {
     /// Patrones predefinidos. El primero es el recomendado.
-    static var builtIn: [PresetProfile] { [activeStudy, surgery, anatomy, clinical] }
+    static var builtIn: [PresetProfile] { [resident, activeStudy, surgery, anatomy, clinical] }
+
+    static let residentName = "Residente de cirugía (7 colores)"
+
+    /// Recomendado: 7 colores. Cada color es una ACCIÓN de repaso (qué harás con eso),
+    /// no un tema: subrayar solo ayuda si después te obliga a recordar (Dunlosky 2013,
+    /// efecto de evocación de Roediger y Karpicke 2006). Los temas (Dx, Tx, Cx…) van en etiquetas.
+    /// Los 5 primeros son los de uso diario; los 2 últimos, de uso ocasional.
+    static var resident: PresetProfile {
+        PresetProfile(name: residentName, presets: [
+            MarkPreset(name: "Idea principal", hex: "#FFC94D", style: .highlight, action: .summary,
+                       detail: "Lo esencial del párrafo: lo que dirías si te preguntan «¿de qué trata?». Máximo una por párrafo."),
+            MarkPreset(name: "Pregunta de examen", hex: "#B9A6FF", style: .highlight, action: .question,
+                       detail: "Lo que te preguntarían en el examen o en el pase de visita. Va a la guía de estudio y a Anki."),
+            MarkPreset(name: "Memorizar exacto", hex: "#FF5A5F", style: .underline, action: .memorize,
+                       detail: "Cifras, dosis, criterios, escalas y clasificaciones: lo que hay que saber al pie de la letra."),
+            MarkPreset(name: "Conducta y tratamiento", hex: "#5FCB8D", style: .highlight, action: .connect,
+                       detail: "Qué haces con el paciente: indicación quirúrgica, técnica, manejo. Únelo con lo que ya sabes."),
+            MarkPreset(name: "Definición", hex: "#6FB7FF", style: .underline, action: .summary,
+                       detail: "Definiciones y conceptos base que sostienen el tema."),
+            MarkPreset(name: "Alerta clínica", hex: "#FF9F43", style: .box, action: .memorize,
+                       detail: "Complicaciones, contraindicaciones y errores graves: lo que no puedes olvidar en quirófano."),
+            MarkPreset(name: "No lo entendí", hex: "#A1A1AA", style: .underline, action: .doubt,
+                       detail: "Para preguntar al adjunto o revisar en otra fuente. Va a la lista de dudas."),
+        ])
+    }
 
     /// Recomendado: 5 colores, cada uno ligado a una acción de repaso.
     /// El tema clínico (Dx, Tx, Cx…) va en etiquetas, no en más colores.

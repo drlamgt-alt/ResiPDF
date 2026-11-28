@@ -95,7 +95,7 @@ enum NotebookExporter {
     private static func inkImage(_ page: NotebookPage, rect: CGRect, scale: CGFloat) -> UIImage? {
         guard let drawing = try? PKDrawing(data: page.drawing), !drawing.strokes.isEmpty else { return nil }
         var image: UIImage?
-        UITraitCollection(userInterfaceStyle: .light).performAsCurrent {
+        UITraitCollection(userInterfaceStyle: page.tint.isDark ? .dark : .light).performAsCurrent {
             image = drawing.image(from: rect, scale: scale)
         }
         return image

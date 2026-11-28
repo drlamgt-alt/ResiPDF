@@ -75,6 +75,7 @@ struct OpenNotebooksButton: View {
 struct NotebooksWindow: View {
     static let id = "cuadernos"
     @Environment(\.dismissWindow) private var dismissWindow
+    @EnvironmentObject private var store: SettingsStore
 
     var body: some View {
         NavigationStack {
@@ -85,5 +86,7 @@ struct NotebooksWindow: View {
                     }
                 }
         }
+        .tint(Theme.accent)
+        .preferredColorScheme(store.settings.appearance.scheme)
     }
 }

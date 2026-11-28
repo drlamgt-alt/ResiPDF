@@ -43,6 +43,8 @@ final class EditorState: ObservableObject {
     @Published var ringPointer: CGPoint?
     @Published var tagRequest: TagRequest?
     @Published var dockCollapsed = false
+    /// Doble toque del Pencil: el mismo color pasa de resaltar a subrayar (y al revés).
+    @Published var styleSwap = false
     @Published var currentPageIndex = 0
     @Published var currentPageIsFavorite = false
     /// Aumenta cada vez que cambian las anotaciones (para refrescar listas).
@@ -86,6 +88,8 @@ final class EditorState: ObservableObject {
         switch action {
         case .none:
             break
+        case .toggleStyle:
+            toggleStyle(store: store)
         case .quickPalette:
             if quickPalettePoint != nil {
                 quickPalettePoint = nil
@@ -105,6 +109,26 @@ final class EditorState: ObservableObject {
                 idx = (i + 1) % presets.count
             }
             select(.preset(presets[idx].id), store: store)
+        }
+    }
+
+    /// Estilo con el que se marca de verdad (teniendo en cuenta el doble toque).
+    func effectiveStyle(of preset: MarkPreset) -> MarkStyle {
+        guard styleSwap else { return preset.style }
+        switch preset.style {
+        case .highlight: return .underline
+        case .underline: return .highlight
+        default: return preset.style
+        }
+    }
+
+    func toggleStyle(store: SettingsStore) {
+        if case .preset = tool {} else { selectFirstPreset(store: store) }
+        styleSwap.toggle()
+        if case .preset(let id) = tool, let p = store.preset(id: id) {
+            showToast("\(effectiveStyle(of: p).label) · \(p.name)")
+        } else {
+            showToast(styleSwap ? "Subrayar con el mismo color" : "Resaltar con el mismo color")
         }
     }
 

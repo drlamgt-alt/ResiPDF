@@ -15,9 +15,16 @@ struct PaperLayout {
 
 /// Dibuja el papel de una hoja. Se usa en pantalla y al exportar a PDF.
 enum PaperRenderer {
-    private static let line = UIColor(red: 0.72, green: 0.80, blue: 0.92, alpha: 1)
-    private static let accent = UIColor(red: 0.86, green: 0.38, blue: 0.42, alpha: 0.85)
-    private static let labelColor = UIColor(white: 0.55, alpha: 1)
+    /// true mientras se dibuja papel de noche (líneas y textos más suaves sobre fondo oscuro).
+    private static var dark = false
+    private static var line: UIColor {
+        dark ? UIColor(red: 0.30, green: 0.36, blue: 0.48, alpha: 1) : UIColor(red: 0.72, green: 0.80, blue: 0.92, alpha: 1)
+    }
+    private static var accent: UIColor {
+        dark ? UIColor(red: 0.85, green: 0.45, blue: 0.50, alpha: 0.75) : UIColor(red: 0.86, green: 0.38, blue: 0.42, alpha: 0.85)
+    }
+    private static var labelColor: UIColor { dark ? UIColor(white: 0.62, alpha: 1) : UIColor(white: 0.55, alpha: 1) }
+    private static var titleColor: UIColor { dark ? UIColor(white: 0.88, alpha: 1) : UIColor(white: 0.25, alpha: 1) }
 
     /// Secciones de la plantilla «Caso clínico» (título y número de renglones).
     static let clinicalSections: [(String, Int)] = [
@@ -36,11 +43,13 @@ enum PaperRenderer {
         let layout = PaperLayout(size: rect.size)
         tint.color.setFill()
         cg.fill(rect)
+        dark = tint.isDark
+        defer { dark = false }
 
         if !title.isEmpty {
             (title as NSString).draw(at: CGPoint(x: 40, y: 32), withAttributes: [
                 .font: UIFont.systemFont(ofSize: 24, weight: .semibold),
-                .foregroundColor: UIColor(white: 0.25, alpha: 1),
+                .foregroundColor: titleColor,
             ])
         }
 

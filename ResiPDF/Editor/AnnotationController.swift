@@ -342,8 +342,9 @@ final class AnnotationController: NSObject, UIGestureRecognizerDelegate, UIPenci
         switch editor.tool {
         case .navigate: return .none
         case .preset(let id):
-            if let p = store.preset(id: id) { return .mark(p) }
-            return .none
+            guard var p = store.preset(id: id) else { return .none }
+            p.style = editor.effectiveStyle(of: p)   // doble toque: resaltar ↔ subrayar
+            return .mark(p)
         case .pen: return .pen(color)
         case .arrow: return .arrow(color)
         case .circle: return .circle(color)
